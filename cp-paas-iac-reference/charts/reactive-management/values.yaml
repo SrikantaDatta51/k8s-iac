@@ -78,6 +78,28 @@ node-problem-detector:
           }
         ]
       }
+    # 4. Infiniband & NCCL (AI Networking)
+    infiniband_monitor.json: |
+      {
+        "plugin": "kmsg",
+        "logPath": "/dev/kmsg",
+        "lookback": "5m",
+        "bufferSize": 10,
+        "source": "infiniband-monitor",
+        "conditions": [
+          {
+            "type": "InfinibandLinkDown",
+            "reason": "LinkFailure",
+            "message": "mlx5_core.*Link is down"
+          },
+          {
+            "type": "NCCLFailure",
+            "reason": "CommFailure",
+            "message": "NCCL WARN"
+          }
+        ]
+      }
+
 
 
 # Medik8s configuration placeholder (no values needed for raw manifests usually, unless customized)
