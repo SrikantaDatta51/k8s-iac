@@ -8,6 +8,77 @@ node-problem-detector:
     enabled: true
   serviceMonitor:
     enabled: false
+  
+  # Custom Monitors for Reactive Scenarios
+  config:
+    # 1. Kernel Deadlock & OOM
+    kernel_monitor.json: |
+      {
+        "plugin": "kmsg",
+        "logPath": "/dev/kmsg",
+        "lookback": "5m",
+        "bufferSize": 10,
+        "source": "kernel-monitor",
+        "conditions": [
+          {
+            "type": "KernelDeadlock",
+            "reason": "TaskHung",
+            "message": "task blocked for more than 120 seconds"
+          },
+          {
+            "type": "ReadonlyFilesystem",
+            "reason": "FilesystemError",
+            "message": "Remounting filesystem read-only"
+          },
+          {
+            "type": "SystemOOM",
+            "reason": "OOMKiller",
+            "message": "Out of memory: Kill process"
+          },
+          {
+            "type": "Ext4Error",
+            "reason": "FilesystemCorruption",
+            "message": "EXT4-fs error"
+          }
+        ]
+      }
+    # 2. Docker/Runtime Issues
+    docker_monitor.json: |
+      {
+        "plugin": "journald",
+        "pluginConfig": {
+          "source": "docker_monitor"
+        },
+        "logPath": "/var/log/journal",
+        "lookback": "5m",
+        "bufferSize": 10,
+        "conditions": [
+          {
+            "type": "CorruptDockerOverlay2",
+            "reason": "Overlay2Error",
+            "message": "failed to register layer: applyLayer: invalid diffID"
+          }
+        ]
+      }
+    # 3. Kubelet/PLEG Issues (filelog for kubelet logs usually at /var/log/kubelet.log or journald)
+    kubelet_monitor.json: |
+      {
+        "plugin": "journald",
+        "pluginConfig": {
+          "source": "kubelet_monitor"
+        },
+        "logPath": "/var/log/journal",
+        "lookback": "5m",
+        "bufferSize": 10,
+        "conditions": [
+          {
+            "type": "PLEGIsNotHealthy",
+            "reason": "PLEGHung",
+            "message": "PLEG is not healthy"
+          }
+        ]
+      }
+
 
 # Medik8s configuration placeholder (no values needed for raw manifests usually, unless customized)
 medik8s:
