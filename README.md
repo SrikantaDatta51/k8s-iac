@@ -202,56 +202,96 @@ kubectl get nodes
 
 ## 6. Phase 3: Release Management (The Uber Strategy)
 
-**Context**: Kubernetes is installed. Now you need to deploy software (Prometheus, Nvidia Drivers, Security Policies).
-**Problem**: Managing 50 Helm releases manually is impossible.
-**Solution**: **The Uber Bundle**.
+**Context**: In a distributed system, "Version Drift" is the enemy.
+*   *Drift*: Dev has Promtail v2.1, Prod has Promtail v2.0.
+*   *Drift*: Dev has Nvidia Driver 535, Prod has 525.
 
-We have created a single "Meta-Chart" located in `/cp-paas-iac-reference/uber/cluster-addons-uber`.
-This chart contains **Dependencies**:
-*   `proactive-management`
-*   `reactive-management`
-*   `calico-cni`
-*   `nvidia-gpu-operator`
+**The Solution**: We enforce a **Single Source of Truth (SSOT)** using the **Uber Bundle Pattern**.
 
-### The Workflow Diagram
+### 6.1 The Stack Explained
+
+| Concept | Directory | Description |
+|---|---|---|
+| **Component** | `components/addons/*` | A standard Helm chart for **ONE** tool (e.g., `gpu-operator`). It knows *how* to install the tool, but not *how to configure it* for specific environments. |
+| **Uber Bundle** | `uber/cluster-addons-uber` | A "Meta-Chart". It has **NO Templates**. It only has a `Chart.yaml` with a list of `dependencies` pointing to Components. It represents the "Platform Version" (e.g., `v1.0`). |
+| **Overlay** | `env/overlays/*` | The **Values-Only** layer. It contains `values.yaml` files that inject specific config (e.g., "ReplicaCount: 3") into the Uber Bundle. |
+
+### 6.2 The "Build" Diagram (Composition)
+
+Code becomes an Artifact.
 
 ```mermaid
 graph TD
-    Dev[Developer] -->|Adds Code| Comp[Component: MyNewTool]
-    Comp -->|Edit Chart.yaml| Uber[Uber Chart]
-    Uber -->|CI Build| Artifact[Version 0.2.0.tgz]
-    Artifact -->|Push| Museum[ChartMuseum]
+    subgraph Source["Source Code (Git)"]
+        C1[Comp: Calico]
+        C2[Comp: Nvidia]
+        C3[Comp: Proactive]
+    end
     
-    ArgoDev -->|Sync 0.2.0| ClusterDev[Dev Cluster]
-    ArgoProd -->|Sync 0.1.9| ClusterProd[Prod Cluster]
+    subgraph Definition["Uber Bundle Definition"]
+        Chart[Chart.yaml]
+    end
+    
+    subgraph Artifact["ChartMuseum Registry"]
+        Tgz[cluster-addons-uber-0.2.0.tgz]
+    end
+    
+    C1 -->|Dep| Chart
+    C2 -->|Dep| Chart
+    C3 -->|Dep| Chart
+    
+    Chart -->|Helm Package| Tgz
 ```
 
-### Developer How-To: "I want to add a monitoring tool"
+### 6.3 The "Deploy" Diagram (Consumption)
 
-Do not kubectl apply it. Follow the process:
+Artifact + Config = Running Cluster.
 
-1.  **Code It**: Create the chart in `cp-paas-iac-reference/components/addons/my-tool`.
-2.  ** bundle It**: Add it to `cp-paas-iac-reference/uber/cluster-addons-uber/Chart.yaml`.
+```mermaid
+graph LR
+    Artifact[Uber Bundle .tgz]
+    
+    subgraph DevEnv["Env: Development"]
+        ValDev[Overlay: dev/values.yaml]
+        ClusterDev[Cluster: Dev]
+    end
+    
+    subgraph ProdEnv["Env: Production"]
+        ValProd[Overlay: prod/values.yaml]
+        ClusterProd[Cluster: Prod]
+    end
+    
+    Artifact -->|Merge| ValDev -->|Install| ClusterDev
+    Artifact -->|Merge| ValProd -->|Install| ClusterProd
+```
+
+### 6.4 Developer Guide: The Lifecycle of a Change
+
+#### Scenario: "I need to increase Etcd Defrag frequency in Prod"
+
+1.  **Locate the Config**: You do *not* touch code. You touch the **Overlay**.
+    *   File: `cp-paas-iac-reference/env/overlays/prod/values-cluster-addons-uber.yaml`
+2.  **Edit Values**:
     ```yaml
-    dependencies:
-      - name: my-tool
-        version: 0.1.0
-        repository: file://../../components/addons/my-tool
+    proactive-management:
+      config:
+        etcd:
+          schedule: "0 1 * * *" # Changed from 0 2
     ```
-3.  **Release It**:
-    Run the CI script (simulated here):
-    ```bash
-    cd cp-paas-iac-reference
-    ./ci/build-and-publish-uber.sh
-    # Output: Published cluster-addons-uber-0.2.0.tgz to ChartMuseum
-    ```
-4.  **Deploy It**:
-    Update the Environment Overlay.
-    Edit `env/overlays/dev/argocd-app.yaml`:
-    ```yaml
-    targetRevision: 0.2.0
-    ```
-    Commit and Push. ArgoCD will see the change and deploy `my-tool`.
+3.  **Commit**: Git Push to `main`.
+4.  **Sync**: ArgoCD detects the change in the *Value File* and re-applies the *Same Artifact* (`0.2.0`) with *New Config*.
+
+#### Scenario: "I want to upgrade the Nvidia Driver"
+
+1.  **Touch Code**: You modify the **Component**.
+    *   File: `components/addons/nvidia-gpu-operator/values.yaml` (Change tag to `535`).
+2.  **Bump Component**: Update `components/addons/nvidia-gpu-operator/Chart.yaml` to `v0.5.0`.
+3.  **Register Change**: Update `uber/cluster-addons-uber/Chart.yaml` dependency to version `0.5.0`.
+4.  **Build**: CI builds new Uber Artifact `v0.2.1`.
+5.  **Promote**:
+    *   Update `env/overlays/dev/argocd-app.yaml` -> `targetRevision: 0.2.1`.
+    *   *Verify in Dev.*
+    *   Update `env/overlays/prod/argocd-app.yaml` -> `targetRevision: 0.2.1`.
 
 ---
 
