@@ -1,0 +1,10 @@
+releases:
+  dev:
+    cluster-addons-uber: 0.1.0
+    tenant-uber: 0.1.0
+  staging:
+    cluster-addons-uber: 0.1.0
+    tenant-uber: 0.1.0
+  prod:
+    cluster-addons-uber: 0.1.0
+    tenant-uber: 0.1.0

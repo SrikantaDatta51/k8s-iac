@@ -1,0 +1,36 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: self-signed-issuer
+spec:
+  selfSigned: {}
+---
+# Node Health Check Certs
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: nhc-serving-cert
+  namespace: node-healthcheck-operator-system
+spec:
+  dnsNames:
+  - node-healthcheck-webhook-service.node-healthcheck-operator-system.svc
+  - node-healthcheck-webhook-service.node-healthcheck-operator-system.svc.cluster.local
+  issuerRef:
+    kind: ClusterIssuer
+    name: self-signed-issuer
+  secretName: node-healthcheck-webhook-server-cert
+---
+# Self Node Remediation Certs
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: snr-serving-cert
+  namespace: self-node-remediation
+spec:
+  dnsNames:
+  - self-node-remediation-webhook-service.self-node-remediation.svc
+  - self-node-remediation-webhook-service.self-node-remediation.svc.cluster.local
+  issuerRef:
+    kind: ClusterIssuer
+    name: self-signed-issuer
+  secretName: self-node-remediation-server-cert

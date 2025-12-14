@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: hello-dev-az1-cpu
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: http://192.168.100.10:30300/gitea_admin/gitops-repo.git
+    targetRevision: main
+    path: apps/hello-world/overlays/dev-az1-cpu
+  destination:
+    name: cpu-cluster
+    namespace: hello-world
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: hello-prod-az2-gpu
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: http://192.168.100.10:30300/gitea_admin/gitops-repo.git
+    targetRevision: main
+    path: apps/hello-world/overlays/prod-az2-gpu
+  destination:
+    name: gpu-cluster
+    namespace: hello-world
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true

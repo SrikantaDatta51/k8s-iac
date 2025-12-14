@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: velero-ui
+  namespace: proactive-maintenance
+  labels:
+    app: velero-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: velero-ui
+  template:
+    metadata:
+      labels:
+        app: velero-ui
+    spec:
+      serviceAccountName: velero
+      containers:
+      - name: velero-ui
+        image: otwld/velero-ui:latest
+        ports:
+        - containerPort: 3000
+        env:
+        # It typically auto-discovers Velero via K8s API if RBAC is correct
+        - name: VELERO_NAMESPACE
+          value: "proactive-maintenance"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: velero-ui
+  namespace: proactive-maintenance
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 3000
+      name: http
+  selector:
+    app: velero-ui

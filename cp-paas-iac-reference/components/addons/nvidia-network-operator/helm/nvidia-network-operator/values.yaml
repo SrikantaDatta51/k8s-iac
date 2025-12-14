@@ -1,0 +1,2 @@
+# Default values for nvidia-network-operator
+enabled: true

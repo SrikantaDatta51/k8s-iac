@@ -1,0 +1,8 @@
+tenant-onboarding:
+  enabled: true
+  tenants:
+    - name: team-dev
+      namespace: team-dev
+      quotas:
+        cpu: "10"
+        memory: "10Gi"

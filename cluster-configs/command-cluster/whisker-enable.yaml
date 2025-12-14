@@ -1,0 +1,11 @@
+apiVersion: operator.tigera.io/v1
+kind: Goldmane
+metadata:
+  name: goldmane
+spec: {}
+---
+apiVersion: operator.tigera.io/v1
+kind: Whisker
+metadata:
+  name: whisker
+spec: {}

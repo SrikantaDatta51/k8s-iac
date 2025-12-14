@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nvidia-network-operator-config
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+data:
+  info: "This is the nvidia-network-operator component"

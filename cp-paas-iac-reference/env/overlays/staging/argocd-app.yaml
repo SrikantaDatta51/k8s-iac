@@ -1,0 +1,53 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-addons-uber-staging
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: http://chartmuseum.chartmuseum.svc.cluster.local:8080
+      chart: cluster-addons-uber
+      targetRevision: 0.1.0
+      helm:
+        valueFiles:
+          - $values/env/overlays/staging/values-cluster-addons-uber.yaml
+    - repoURL: http://192.168.100.10:30300/gitea_admin/cp-paas-iac-reference.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://192.168.100.30:6443 # Using CPU cluster for staging as per prev config
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tenant-uber-staging
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: http://chartmuseum.chartmuseum.svc.cluster.local:8080
+      chart: tenant-uber
+      targetRevision: 0.1.0
+      helm:
+        valueFiles:
+          - $values/env/overlays/staging/values-tenant-uber.yaml
+    - repoURL: http://192.168.100.10:30300/gitea_admin/cp-paas-iac-reference.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://192.168.100.30:6443
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

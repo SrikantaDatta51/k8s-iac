@@ -1,0 +1,66 @@
+apiVersion: remediation.medik8s.io/v1alpha1
+kind: NodeHealthCheck
+metadata:
+  name: gpu-health-check
+  labels:
+    app.kubernetes.io/name: reactive-management
+spec:
+  minHealthy: "51%"
+  selector:
+    matchExpressions:
+      - key: node-role.kubernetes.io/worker
+        operator: Exists
+      - key: maintenance.mode
+        operator: NotIn
+        values: ["true"]
+      - key: accelerator
+        operator: In
+        values: ["nvidia"]
+  remediationTemplate:
+    kind: SelfNodeRemediationConfig
+    apiVersion: self-node-remediation.medik8s.io/v1alpha1
+    name: self-node-remediation-config-default
+    namespace: self-node-remediation
+  unhealthyConditions:
+    - type: Ready
+      status: "False"
+      duration: 300s # 5m
+    - type: Ready
+      status: Unknown
+      duration: 300s # 5m
+    - type: KernelDeadlock
+      status: "True"
+      duration: 60s
+    - type: ReadonlyFilesystem
+      status: "True"
+      duration: 60s
+    - type: CorruptDockerOverlay2
+      status: "True"
+      duration: 60s
+    - type: FrequentKubeletRestart
+      status: "True"
+      duration: 300s
+    - type: FrequentDockerRestart
+      status: "True"
+      duration: 300s
+    - type: PLEGIsNotHealthy
+      status: "True"
+      duration: 300s
+    - type: NetworkUnavailable
+      status: "True"
+      duration: 300s
+    - type: SystemOOM
+      status: "True"
+      duration: 60s
+    - type: Ext4Error
+      status: "True"
+      duration: 60s
+---
+# Default SNR Config (if not already created by operator)
+apiVersion: self-node-remediation.medik8s.io/v1alpha1
+kind: SelfNodeRemediationConfig
+metadata:
+  name: self-node-remediation-config-default
+  namespace: self-node-remediation
+spec:
+  safeTimeToAssumeNodeRebootedSeconds: 180

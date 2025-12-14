@@ -1,0 +1,22 @@
+apiVersion: v2
+name: cluster-addons-uber
+description: Uber chart for cluster add-ons
+type: application
+version: 0.1.4
+
+dependencies:
+  - name: cni-core
+    version: 0.1.4
+    repository: "file://../../components/addons/cni-core/helm/cni-core"
+  - name: multus-core
+    version: 0.1.4
+    repository: "file://../../components/addons/multus-core/helm/multus-core"
+  - name: nvidia-network-operator
+    version: 0.1.4
+    repository: "file://../../components/addons/nvidia-network-operator/helm/nvidia-network-operator"
+  - name: nvidia-gpu-operator
+    version: 0.1.4
+    repository: "file://../../components/addons/nvidia-gpu-operator/helm/nvidia-gpu-operator"
+  - name: calico-whisker-ui
+    version: 0.1.4
+    repository: "file://../../components/addons/calico-whisker-ui/helm/calico-whisker-ui"

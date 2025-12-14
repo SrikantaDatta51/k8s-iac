@@ -1,0 +1,259 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hourly-pod-hygiene
+  namespace: proactive-maintenance
+spec:
+  schedule: {{ .Values.schedules.cleanupPodHygiene | quote }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: maintenance-sa
+          restartPolicy: Never
+          containers:
+            - name: runner
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              command: ["/bin/bash", "/scripts/cleanup-pod-hygiene.sh"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+          volumes:
+            - name: scripts
+              configMap:
+                name: maintenance-scripts
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hourly-check-certs
+  namespace: proactive-maintenance
+spec:
+  schedule: {{ .Values.schedules.checkCerts | quote }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: maintenance-sa
+          restartPolicy: Never
+          containers:
+            - name: runner
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              command: ["/bin/bash", "/scripts/check-certs.sh"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+          volumes:
+            - name: scripts
+              configMap:
+                name: maintenance-scripts
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: daily-node-cleaner
+  namespace: proactive-maintenance
+spec:
+  schedule: {{ .Values.schedules.nodeCleaner | quote }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: maintenance-sa
+          restartPolicy: Never
+          containers:
+            - name: runner
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              command: ["/bin/bash", "/scripts/node-cleaner.sh"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+          volumes:
+            - name: scripts
+              configMap:
+                name: maintenance-scripts
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: daily-stuck-ns
+  namespace: proactive-maintenance
+spec:
+  schedule: {{ .Values.schedules.stuckNs | quote }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: maintenance-sa
+          restartPolicy: Never
+          containers:
+            - name: runner
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              command: ["/bin/bash", "/scripts/stuck-ns.sh"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+          volumes:
+            - name: scripts
+              configMap:
+                name: maintenance-scripts
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: daily-empty-svc
+  namespace: proactive-maintenance
+spec:
+  schedule: {{ .Values.schedules.emptySvc | quote }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: maintenance-sa
+          restartPolicy: Never
+          containers:
+            - name: runner
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              command: ["/bin/bash", "/scripts/empty-svc.sh"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+          volumes:
+            - name: scripts
+              configMap:
+                name: maintenance-scripts
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: daily-etcd-snapshot
+  namespace: proactive-maintenance
+spec:
+  schedule: {{ .Values.schedules.etcdSnapshot | quote }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: maintenance-sa
+          restartPolicy: Never
+          containers:
+            - name: runner
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              command: ["/bin/bash", "/scripts/etcd-snapshot.sh"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+          volumes:
+            - name: scripts
+              configMap:
+                name: maintenance-scripts
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: weekly-orphaned-pvc
+  namespace: proactive-maintenance
+spec:
+  schedule: {{ .Values.schedules.orphanedPvc | quote }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: maintenance-sa
+          restartPolicy: Never
+          containers:
+            - name: runner
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              command: ["/bin/bash", "/scripts/orphaned-pvc.sh"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+          volumes:
+            - name: scripts
+              configMap:
+                name: maintenance-scripts
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: weekly-missing-pdb
+  namespace: proactive-maintenance
+spec:
+  schedule: {{ .Values.schedules.missingPdb | quote }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: maintenance-sa
+          restartPolicy: Never
+          containers:
+            - name: runner
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              command: ["/bin/bash", "/scripts/missing-pdb.sh"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+          volumes:
+            - name: scripts
+              configMap:
+                name: maintenance-scripts
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: weekly-restart-analysis
+  namespace: proactive-maintenance
+spec:
+  schedule: {{ .Values.schedules.restartAnalysis | quote }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: maintenance-sa
+          restartPolicy: Never
+          containers:
+            - name: runner
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              command: ["/bin/bash", "/scripts/restart-analysis.sh"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+          volumes:
+            - name: scripts
+              configMap:
+                name: maintenance-scripts
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hourly-gpu-capacity
+  namespace: proactive-maintenance
+spec:
+  schedule: {{ .Values.schedules.gpuCapacity | quote }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: maintenance-sa
+          restartPolicy: Never
+          containers:
+            - name: runner
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              command: ["/bin/bash", "/scripts/gpu-capacity.sh"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+          volumes:
+            - name: scripts
+              configMap:
+                name: maintenance-scripts

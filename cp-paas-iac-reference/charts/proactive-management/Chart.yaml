@@ -1,0 +1,6 @@
+apiVersion: v2
+name: proactive-management
+description: Proactive maintenance CronJobs (etcd snapshot, defrag, cleanups)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

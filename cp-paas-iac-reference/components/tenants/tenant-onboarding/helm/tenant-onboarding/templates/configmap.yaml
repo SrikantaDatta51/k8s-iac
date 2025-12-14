@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tenant-onboarding-config
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+data:
+  info: "This is the tenant-onboarding component"

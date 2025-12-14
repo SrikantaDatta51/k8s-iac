@@ -1,0 +1,9 @@
+tenant-onboarding:
+  enabled: true
+  tenants:
+    - name: team-prod
+      namespace: team-prod
+      quotas:
+        cpu: "100"
+        memory: "100Gi"
+        nvidiaGpu: "8"

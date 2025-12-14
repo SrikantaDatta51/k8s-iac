@@ -1,0 +1,2 @@
+# Default values for cni-core
+enabled: true

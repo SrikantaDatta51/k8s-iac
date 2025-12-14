@@ -1,0 +1,5 @@
+<network>
+  <name>k8s-net</name>
+  <forward mode='bridge'/>
+  <bridge name='virbr-k8s'/>
+</network>

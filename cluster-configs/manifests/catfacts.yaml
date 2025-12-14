@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: catfacts
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+  namespace: catfacts
+  labels:
+    app: db
+spec:
+  selector:
+    matchLabels:
+      app: db
+  template:
+    metadata:
+      labels:
+        app: db
+    spec:
+      containers:
+      - name: db
+        image: mysql:5.7
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "password"
+        ports:
+        - containerPort: 3306
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: facts
+  namespace: catfacts
+  labels:
+    app: facts
+spec:
+  selector:
+    matchLabels:
+      app: facts
+  template:
+    metadata:
+      labels:
+        app: facts
+    spec:
+      containers:
+      - name: facts
+        image: mhausenblas/catfacts:0.1
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: facts
+  namespace: catfacts
+spec:
+  selector:
+    app: facts
+  ports:
+  - port: 80
+    targetPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: catfacts
+  labels:
+    app: worker
+spec:
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      containers:
+      - name: worker
+        image: busybox
+        command: ["/bin/sh", "-c", "while true; do wget -qO- http://facts; sleep 5; done"]

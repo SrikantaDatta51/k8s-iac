@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nginx-gpu
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: http://192.168.100.10:30300/gitea_admin/gitops-repo.git
+    targetRevision: HEAD
+    path: apps/whisker-demo
+  destination:
+    server: https://192.168.100.20:6443
+    namespace: quickstart
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nginx-cpu
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: http://192.168.100.10:30300/gitea_admin/gitops-repo.git
+    targetRevision: HEAD
+    path: apps/whisker-demo
+  destination:
+    server: https://192.168.100.30:6443
+    namespace: quickstart
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true

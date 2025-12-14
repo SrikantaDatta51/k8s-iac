@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: maintenance-sa
+  namespace: proactive-maintenance
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: maintenance-role
+rules:
+  # Base Maintenance (Pods/PVCs)
+  - apiGroups: [""]
+    resources: ["nodes", "pods", "pods/eviction", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "delete"]
+  # Jobs
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "delete"]
+  # ConfigMaps
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "create", "update"]
+  # Expanded Proactive Scenarios (Audit access)
+  - apiGroups: [""]
+    resources: ["namespaces", "services", "endpoints", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: maintenance-binding
+subjects:
+  - kind: ServiceAccount
+    name: maintenance-sa
+    namespace: proactive-maintenance
+roleRef:
+  kind: ClusterRole
+  name: maintenance-role
+  apiGroup: rbac.authorization.k8s.io

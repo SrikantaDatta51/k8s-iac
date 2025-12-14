@@ -1,0 +1,23 @@
+# Default values for reactive-management.
+# This is a wrapper chart for Medik8s operators + Node Problem Detector
+
+namespace: reactive-maintenance
+
+node-problem-detector:
+  metrics:
+    enabled: true
+  serviceMonitor:
+    enabled: false
+
+# Medik8s configuration placeholder (no values needed for raw manifests usually, unless customized)
+medik8s:
+  enableNHC: true
+  enableNMO: true
+  enableSNR: true
+
+policies:
+  # Example remediation policy
+  gpuRemediation:
+    enabled: true
+    nodeSelector:
+      accelerator: nvidia

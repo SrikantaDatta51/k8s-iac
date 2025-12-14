@@ -1,0 +1,6 @@
+dependencies:
+- name: tenant-onboarding
+  repository: file://../../components/tenants/tenant-onboarding/helm/tenant-onboarding
+  version: 0.1.0
+digest: sha256:a5f3b4ea8a744191dfc10ae3bf121b3401d75f67cf9097eeb6fc76cf3f9dca6f
+generated: "2025-12-07T19:46:06.462665295-08:00"

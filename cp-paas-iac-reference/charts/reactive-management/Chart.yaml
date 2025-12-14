@@ -1,0 +1,10 @@
+apiVersion: v2
+name: reactive-management
+description: Reactive node health maintenance (NPD + NodeMaintenance + SelfNodeRemediation)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+dependencies:
+  - name: node-problem-detector
+    version: "2.3.13"
+    repository: "https://charts.deliveryhero.io/"

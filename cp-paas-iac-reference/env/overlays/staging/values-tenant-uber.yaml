@@ -1,0 +1,8 @@
+tenant-onboarding:
+  enabled: true
+  tenants:
+    - name: team-staging
+      namespace: team-staging
+      quotas:
+        cpu: "50"
+        memory: "50Gi"

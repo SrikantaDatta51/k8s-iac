@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chartmuseum
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: chartmuseum-pvc
+  namespace: chartmuseum
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chartmuseum
+  namespace: chartmuseum
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chartmuseum
+  template:
+    metadata:
+      labels:
+        app: chartmuseum
+    spec:
+      nodeName: cmd-master
+      containers:
+      - name: chartmuseum
+        image: ghcr.io/helm/chartmuseum:v0.16.1
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DEBUG
+          value: "1"
+        - name: STORAGE
+          value: "local"
+        - name: STORAGE_LOCAL_ROOTDIR
+          value: "/charts"
+        volumeMounts:
+        - name: storage-volume
+          mountPath: "/charts"
+      volumes:
+      - name: storage-volume
+        persistentVolumeClaim:
+          claimName: chartmuseum-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chartmuseum
+  namespace: chartmuseum
+spec:
+  type: NodePort
+  ports:
+  - port: 8080
+    targetPort: 8080
+    nodePort: 30080
+  selector:
+    app: chartmuseum

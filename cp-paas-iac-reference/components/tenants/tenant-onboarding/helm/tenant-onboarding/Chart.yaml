@@ -1,0 +1,6 @@
+apiVersion: v2
+name: tenant-onboarding
+description: Helm chart for tenant-onboarding
+type: application
+version: 0.1.4
+appVersion: 0.1.0

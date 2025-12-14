@@ -1,0 +1,10 @@
+apiVersion: v2
+name: tenant-uber
+description: Uber chart for tenant onboarding
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: tenant-onboarding
+    version: 0.1.0
+    repository: "file://../../components/tenants/tenant-onboarding/helm/tenant-onboarding"

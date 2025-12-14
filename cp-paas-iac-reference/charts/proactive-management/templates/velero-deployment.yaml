@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: velero
+  namespace: proactive-maintenance
+  labels:
+    component: velero
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      component: velero
+  template:
+    metadata:
+      labels:
+        component: velero
+    spec:
+      serviceAccountName: velero
+      containers:
+      - name: velero
+        image: velero/velero:v1.13.0
+        command: ["/velero"]
+        args:
+        - server
+        - --default-backup-storage-location=default
+        env:
+        - name: VELERO_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: AWS_ACCESS_KEY_ID
+          value: "minio-admin"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "minio-password"
+        volumeMounts:
+        - name: plugins
+          mountPath: /plugins
+        - name: cloud-creds
+          mountPath: /credentials
+      initContainers:
+      - name: velero-plugin-for-aws
+        image: velero/velero-plugin-for-aws:v1.9.0
+        volumeMounts:
+        - name: plugins
+          mountPath: /target
+      volumes:
+      - name: plugins
+        emptyDir: {}
+      - name: cloud-creds
+        secret:
+          secretName: velero-minio-creds
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: velero
+  namespace: proactive-maintenance
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: velero
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: velero
+  namespace: proactive-maintenance
