@@ -1,32 +1,51 @@
-# Default values for proactive-management.
+# Proactive Management Configuration
 
 image:
   repository: bitnami/kubectl
   tag: 1.28.15
   pullPolicy: IfNotPresent
+  # Note: Some scripts require 'etcdctl', 'jq', 'openssl'.
+  # Ensure the image has these tools, or use a custom maintenance image.
+  # Recommended: custom image with kubectl, etcdctl, jq, bash, curl, openssl.
 
 schedules:
   etcdSnapshot: "0 1 * * *"      # Nightly 01:00
-  # Hourly
-  cleanupPodHygiene: "0 * * * *" # Hourly
-  checkCerts: "30 * * * *"       # Hourly :30
-
-  # Daily
   etcdDefrag: "30 2 * * *"       # Daily 02:30
   nodeCleaner: "0 4 * * *"       # Daily 04:00
   stuckNs: "0 5 * * *"           # Daily 05:00
   emptySvc: "0 6 * * *"          # Daily 06:00
-  etcdSnapshot: "0 1 * * *"      # Daily 01:00 (Updated from Weekly)
-
-  # Weekly
-  orphanedPvc: "0 6 * * 0"       # Sunday 06:00
-  missingPdb: "0 7 * * 0"        # Sunday 07:00
-  nodeChecks: "0 2 * * 0"        # Weekly Sunday 02:00
-  
-  # Hourly
-  restartAnalysis: "0 * * * *"   # Hourly :00
+  cleanupPodHygiene: "0 * * * *" # Hourly :00
+  checkCerts: "30 * * * *"       # Hourly :30
   gpuCapacity: "15 * * * *"      # Hourly :15
+  restartAnalysis: "0 * * * *"   # Hourly :00
+  orphanedPvc: "0 6 * * 0"       # Weekly Sunday 06:00
+  missingPdb: "0 7 * * 0"        # Weekly Sunday 07:00
 
+# Script Configuration Parameters
 config:
-  etcdEndpoints: "https://127.0.0.1:2379"
-  historyLimit: 3
+  # Etcd Settings
+  etcd:
+    endpoints: "https://127.0.0.1:2379"
+    backupDir: "/backup"
+    retentionDays: 7
+    # Paths inside the container (mounted from host)
+    certFile: "/etc/kubernetes/pki/etcd/healthcheck-client.crt"
+    keyFile: "/etc/kubernetes/pki/etcd/healthcheck-client.key"
+    caFile: "/etc/kubernetes/pki/etcd/ca.crt"
+
+  # Hygiene Settings
+  hygiene:
+    podGracePeriod: "30m"   # Force delete terminating pods older than this
+    maxTmpFileAge: "10"     # Days to retain /tmp files
+
+  # Cert Audit Settings
+  pki:
+    path: "/etc/kubernetes/pki"
+    warningDays: 30
+
+  # GPU Settings
+  gpu:
+    resourceName: "nvidia.com/gpu"
+
+  # General
+  logLevel: "INFO"

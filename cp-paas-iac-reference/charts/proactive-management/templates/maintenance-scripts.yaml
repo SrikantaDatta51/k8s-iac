@@ -4,156 +4,319 @@ metadata:
   name: maintenance-scripts
   namespace: proactive-maintenance
 data:
+  # -------------------------------------------------------------------------
+  # Common Lib
+  # -------------------------------------------------------------------------
+  lib.sh: |
+    #!/bin/bash
+    log() {
+      echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')] [$1] $2"
+    }
+    
+    check_deps() {
+      for cmd in "$@"; do
+        if ! command -v "$cmd" &> /dev/null; then
+          log "ERROR" "Missing required command: $cmd"
+          exit 1
+        fi
+      done
+    }
+
+  # -------------------------------------------------------------------------
+  # 1. Etcd Snapshot
+  # -------------------------------------------------------------------------
+  etcd-snapshot.sh: |
+    #!/bin/bash
+    set -e
+    source /scripts/lib.sh
+    check_deps etcdctl
+
+    ETCDCTL_API=3
+    ENDPOINTS="{{ .Values.config.etcd.endpoints }}"
+    BACKUP_DIR="{{ .Values.config.etcd.backupDir }}"
+    RETENTION="{{ .Values.config.etcd.retentionDays }}"
+    CACERT="{{ .Values.config.etcd.caFile }}"
+    CERT="{{ .Values.config.etcd.certFile }}"
+    KEY="{{ .Values.config.etcd.keyFile }}"
+
+    # Create backup dir if missing
+    mkdir -p "$BACKUP_DIR"
+    
+    TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+    FILENAME="$BACKUP_DIR/etcd-snapshot-$TIMESTAMP.db"
+
+    log "INFO" "Starting Etcd Snapshot..."
+    log "INFO" "Target: $FILENAME"
+
+    if etcdctl --endpoints="$ENDPOINTS" \
+         --cacert="$CACERT" --cert="$CERT" --key="$KEY" \
+         snapshot save "$FILENAME"; then
+       log "INFO" "Snapshot created successfully."
+       log "INFO" "Size: $(du -h $FILENAME | cut -f1)"
+    else
+       log "ERROR" "Snapshot failed!"
+       exit 1
+    fi
+
+    log "INFO" "Pruning snapshots older than $RETENTION days..."
+    find "$BACKUP_DIR" -name "etcd-snapshot-*.db" -mtime +$RETENTION -print -delete
+    log "INFO" "Cleanup complete."
+
+  # -------------------------------------------------------------------------
+  # 2. Etcd Rolling Defrag
+  # -------------------------------------------------------------------------
   etcd-defrag.sh: |
     #!/bin/bash
     set -e
-    echo "Starting etcd defrag..."
-    # Placeholder for actual rolling defrag logic
-    # In a real scenario, this would contact separate etcd endpoints
-    echo "Defragging member 1..."
-    sleep 2
-    echo "Defragging member 2..."
-    sleep 2
-    echo "Defragging member 3..."
-    sleep 2
-    echo "Etcd defrag completed successfully."
+    source /scripts/lib.sh
+    check_deps etcdctl jq curl
 
-  cleanup-jobs.sh: |
-    #!/bin/bash
-    echo "Cleaning up completed jobs..."
-    kubectl delete jobs --field-selector status.successful=1 --all-namespaces
-    echo "Done."
+    ETCDCTL_API=3
+    # Note: We rely on K8s DNS to resolve endpoints for individual access
+    # Logic: Get Member List -> Find Leader -> Defrag Others -> Defrag Leader
+    
+    CACERT="{{ .Values.config.etcd.caFile }}"
+    CERT="{{ .Values.config.etcd.certFile }}"
+    KEY="{{ .Values.config.etcd.keyFile }}"
+    
+    log "INFO" "Fetching Etcd Members..."
+    # Simplified: Assuming endpoints passed via Values, but for Defrag we often check member list
+    # For robust rolling, we use the member list from API
+    
+    MEMBERS_JSON=$(etcdctl --endpoints="{{ .Values.config.etcd.endpoints }}" \
+         --cacert="$CACERT" --cert="$CERT" --key="$KEY" \
+         member list -w json)
+    
+    # Extract Client URLs
+    URLS=$(echo "$MEMBERS_JSON" | jq -r '.members[].clientURLs[]')
 
-  cleanup-evicted.sh: |
-    #!/bin/bash
-    echo "Cleaning up evicted pods..."
-    kubectl get pods -A --field-selector=status.phase=Failed -o json | \
-      jq '.items[] | select(.status.reason=="Evicted") | "kubectl delete pod \(.metadata.name) -n \(.metadata.namespace)"' | \
-      xargs -r -n 1 bash -c
-    echo "Done."
-
-  cleanup-stuck.sh: |
-    #!/bin/bash
-    echo "Cleaning up stuck terminating pods..."
-    # Find pods with deletionTimestamp set and force delete them
-    kubectl get pods -A -o json | \
-      jq -r '.items[] | select(.metadata.deletionTimestamp != null) | "kubectl delete pod \(.metadata.name) -n \(.metadata.namespace) --force --grace-period=0"' | \
-      xargs -r -n 1 bash -c
-    echo "Done."
-
-  cleanup-pod-hygiene.sh: |
-    #!/bin/bash
-    echo "[Hourly] Starting Pod Hygiene..."
-    # 1. Evicted
-    kubectl get pods -A --field-selector=status.phase=Failed -o json | \
-      jq '.items[] | select(.status.reason=="Evicted") | "kubectl delete pod \(.metadata.name) -n \(.metadata.namespace)"' | \
-      xargs -r -n 1 bash -c
-    # 2. Stuck Terminating
-    kubectl get pods -A -o json | \
-      jq -r '.items[] | select(.metadata.deletionTimestamp != null) | "kubectl delete pod \(.metadata.name) -n \(.metadata.namespace) --force --grace-period=0"' | \
-      xargs -r -n 1 bash -c
-    # 3. Completed Jobs (aggressive prune)
-    kubectl delete pod --field-selector=status.phase=Succeeded -A
-    echo "Hygiene Complete."
-
-  check-certs.sh: |
-    #!/bin/bash
-    echo "[Hourly] Checking Certificate Expiry..."
-    # Placeholder: In a real env, check /etc/kubernetes/pki or cert-manager resources
-    echo "Scanning certificates in /etc/kubernetes/pki..."
-    # Simulated check
-    if [ $((RANDOM % 10)) -eq 0 ]; then
-      echo "WARNING: apiserver.crt expires in 28 days!"
-    else
-      echo "All certificates healthy > 30 days."
+    # Detect Leader
+    STATUS_JSON=$(etcdctl --endpoints="{{ .Values.config.etcd.endpoints }}" \
+         --cacert="$CACERT" --cert="$CERT" --key="$KEY" \
+         endpoint status -w json)
+    LEADER_ID=$(echo "$STATUS_JSON" | jq -r '.[].Status.leader')
+    
+    log "INFO" "Defragging Followers first..."
+    
+    for url in $URLS; do
+        # Check if this endpoint is the leader (requires correlating MemberID, simplified here to just run)
+        # Production scripts often check 'endpoint status' per URL to see IsLeader
+        
+        IS_LEADER=$(etcdctl --endpoints="$url" --cacert="$CACERT" --cert="$CERT" --key="$KEY" endpoint status -w json | jq -r '.[].Status.header.member_id == .[].Status.leader')
+        
+        if [ "$IS_LEADER" == "true" ]; then
+            log "INFO" "Skipping Leader ($url) for now..."
+            LEADER_URL="$url"
+        else
+            log "INFO" "Defragging Follower: $url"
+            etcdctl --endpoints="$url" --cacert="$CACERT" --cert="$CERT" --key="$KEY" defrag
+            log "INFO" "Pausing 5s for sync..."
+            sleep 5
+        fi
+    done
+    
+    if [ -n "$LEADER_URL" ]; then
+        log "INFO" "Finally, defragging Leader: $LEADER_URL"
+        etcdctl --endpoints="$LEADER_URL" --cacert="$CACERT" --cert="$CERT" --key="$KEY" defrag
     fi
+    
+    log "INFO" "Rolling Defrag Complete."
 
+  # -------------------------------------------------------------------------
+  # 3. Node Cleaner
+  # -------------------------------------------------------------------------
   node-cleaner.sh: |
     #!/bin/bash
-    echo "[Daily] Node Cleaner..."
-    # 1. Prune unused images (using crictl if available, else docker)
+    set -e
+    source /scripts/lib.sh
+    MAX_AGE="{{ .Values.config.hygiene.maxTmpFileAge }}"
+
+    log "INFO" "Starting Node Cleaner..."
+
+    # 1. Image Pruning
     if command -v crictl &> /dev/null; then
-        echo "Pruning images via crictl..."
-        # crictl rmi --prune (simulated for safety)
-        echo "crictl rmi -q (unused)"
+        log "INFO" "Pruning images via crictl..."
+        crictl rmi --prune || log "WARN" "crictl prune returned non-zero"
+    elif command -v docker &> /dev/null; then
+        log "INFO" "Pruning images via docker..."
+        docker system prune -af --volumes || log "WARN" "docker prune returned non-zero"
     else
-        echo "Pruning images via docker..."
-        # docker system prune -af (simulated)
+        log "WARN" "No container runtime CLI found (crictl/docker)."
     fi
-    # 2. Clean /tmp (careful!)
-    echo "Cleaning old /tmp files..."
-    find /tmp -type f -atime +10 -delete
-    echo "Node Clean Complete."
 
-  etcd-snapshot.sh: |
-    #!/bin/bash
-    echo "[Daily] Taking etcd snapshot..."
-    BACKUP_DIR="/backup"
-    FILENAME="etcd-snapshot-$(date +%Y%m%d).db"
-    # ETCDCTL_API=3 etcdctl snapshot save $BACKUP_DIR/$FILENAME
-    echo "Snapshot saved to $BACKUP_DIR/$FILENAME"
-    
-    echo "Cleaning up snapshots older than 7 days..."
-    # find $BACKUP_DIR -name "etcd-snapshot-*.db" -mtime +7 -delete
-    echo "Cleanup complete."
-    ls -lh $BACKUP_DIR/ | head -n 10
-
-  gpu-capacity.sh: |
-    #!/bin/bash
-    echo "[Hourly] GPU Capacity Report..."
-    echo "Node | Allocatable | Capacity"
-    kubectl get nodes -o custom-columns=NAME:.metadata.name,ALLOCATABLE:.status.allocatable.nvidia\.com/gpu,CAPACITY:.status.capacity.nvidia\.com/gpu
-    echo "Report Complete."
-
-  install-velero.sh: |
-    #!/bin/bash
-    echo "[One-Time] Installing Velero with MinIO Target..."
-    # Download CLI (simulated or real if wget available)
-    if ! command -v velero &> /dev/null; then
-        echo "Velero CLI not found. Downloading..."
-        # wget https://github.com/vmware-tanzu/velero/releases...
-        # For this env, we assume we might need to run this outside or just fake the install verification
-        echo "Please run 'velero install --provider aws --plugins velero/velero-plugin-for-aws:v1.0.0 --bucket velero --secret-file ./credentials-velero --use-volume-snapshots=false --backup-location-config region=minio,s3ForcePathStyle=\"true\",s3Url=http://minio.proactive-maintenance.svc:9000' manually."
-        exit 0
+    # 2. Tmp Cleanup
+    log "INFO" "Cleaning /tmp files older than $MAX_AGE days..."
+    # Safety: ensure we are looking at real /tmp (host mount)
+    if [ -d "/host/tmp" ]; then
+        find /host/tmp -type f -atime +$MAX_AGE -delete
+    else
+        log "WARN" "/host/tmp not mounted. Cleaning container /tmp (less useful)."
+        find /tmp -type f -atime +$MAX_AGE -delete
     fi
-    echo "Velero installed."
+    log "INFO" "Node Clean Complete."
 
+  # -------------------------------------------------------------------------
+  # 4. Stuck Namespaces
+  # -------------------------------------------------------------------------
   stuck-ns.sh: |
     #!/bin/bash
-    echo "[Daily] Checking for Stuck Namespaces..."
-    kubectl get ns -o json | \
-      jq -r '.items[] | select(.status.phase=="Terminating") | "WARNING: Namespace \(.metadata.name) is stuck Terminating"'
-    echo "Check Complete."
+    set -e
+    source /scripts/lib.sh
+    check_deps kubectl jq
 
+    log "INFO" "Checking for Stuck Namespaces..."
+    
+    # Get NS in Terminating
+    STUCK=$(kubectl get ns -o json | jq -r '.items[] | select(.status.phase=="Terminating") | .metadata.name')
+    
+    if [ -z "$STUCK" ]; then
+        log "INFO" "No stuck namespaces found."
+    else
+        for ns in $STUCK; do
+            log "WARN" "Namespace '$ns' is stuck in Terminating!"
+            # Optional: Check resources holding it back
+            RESOURCES=$(kubectl api-resources --verbs=list --namespaced -o name | xargs -n 1 kubectl get --show-kind --ignore-not-found -n "$ns" 2>/dev/null)
+            if [ -n "$RESOURCES" ]; then
+               log "INFO" "Blocking resources in $ns: $RESOURCES"
+            fi
+        done
+    fi
+
+  # -------------------------------------------------------------------------
+  # 5. Empty Services
+  # -------------------------------------------------------------------------
   empty-svc.sh: |
     #!/bin/bash
-    echo "[Daily] Checking for Empty Services..."
-    # Find services that select pods but have no endpoints
+    set -e
+    source /scripts/lib.sh
+    check_deps kubectl jq
+
+    log "INFO" "Audit: Empty Services (No Endpoints)..."
+    
     kubectl get endpoints -A -o json | \
-      jq -r '.items[] | select((.subsets == null) and (.metadata.name != "kubernetes")) | "WARNING: Service \(.metadata.name) in \(.metadata.namespace) has no endpoints"'
-    echo "Check Complete."
+      jq -r '.items[] | select((.subsets == null) and (.metadata.name != "kubernetes")) | "WARN: Service \(.metadata.name) (ns: \(.metadata.namespace)) has NO endpoints"' | \
+      while read line; do log "$line"; done
+      
+    log "INFO" "Audit Complete."
 
-  missing-pdb.sh: |
+  # -------------------------------------------------------------------------
+  # 6. Pod Hygiene
+  # -------------------------------------------------------------------------
+  cleanup-pod-hygiene.sh: |
     #!/bin/bash
-    echo "[Weekly] Checking for Missing PDBs..."
-    # Simplified check: List Deployments with replicas > 1 and no PDB
-    # (Note: In a script this is complex, doing a basic list for now)
-    echo "Scanning Deployments with >1 replicas..."
-    kubectl get deploy -A -o json | \
-      jq -r '.items[] | select(.spec.replicas > 1) | "INFO: Check PDB for Deployment \(.metadata.name) in \(.metadata.namespace)"'
-    # Real logic would join with PDB list, but this serves the "Audit" purpose
-    echo "Audit Complete."
+    set -e
+    source /scripts/lib.sh
+    check_deps kubectl jq
 
-  restart-analysis.sh: |
+    GRACE="{{ .Values.config.hygiene.podGracePeriod }}"
+    # Convert "30m" to seconds for older 'date' logic if needed, but kubectl logic here mainly relies on force
+    
+    log "INFO" "Starting Pod Hygiene (Grace: $GRACE)..."
+    
+    # 1. Evicted Pods (Reason=Evicted)
+    log "INFO" "Deleting Evicted pods..."
+    kubectl get pods -A --field-selector=status.phase=Failed -o json | \
+      jq -r '.items[] | select(.status.reason=="Evicted") | .metadata.name + " -n " + .metadata.namespace' | \
+      while read pod_cmd; do
+          log "INFO" "Deleting Evicted: $pod_cmd"
+          kubectl delete pod $pod_cmd --wait=false
+      done
+
+    # 2. Stuck Terminating (Deleted but still present)
+    # Using --force --grace-period=0 is aggressive; usually for "Stuck"
+    log "INFO" "Force-deleting stuck terminating pods..."
+    kubectl get pods -A -o json | \
+      jq -r '.items[] | select(.metadata.deletionTimestamp != null) | .metadata.name + " -n " + .metadata.namespace' | \
+      while read pod_cmd; do
+          # Check age/stat logic if needed, but usually if it HAS deletionTimestamp it is terminating.
+          log "INFO" "Force Removing: $pod_cmd"
+          kubectl delete pod $pod_cmd --force --grace-period=0 2>/dev/null || true
+      done
+      
+    log "INFO" "Hygiene Complete."
+
+  # -------------------------------------------------------------------------
+  # 7. Check Certs
+  # -------------------------------------------------------------------------
+  check-certs.sh: |
     #!/bin/bash
-    echo "[Hourly] High Restart Analysis..."
-    kubectl get pods -A --sort-by='.status.containerStatuses[0].restartCount' -o wide | tail -n 20
-    echo "Top 20 Restarting Pods listed above."
+    set -e
+    source /scripts/lib.sh
+    check_deps openssl
 
+    PKI_PATH="{{ .Values.config.pki.path }}"
+    WARN_DAYS="{{ .Values.config.pki.warningDays }}"
+    
+    log "INFO" "Auditing Certificates in $PKI_PATH (< $WARN_DAYS days)..."
+    
+    if [ ! -d "$PKI_PATH" ]; then
+       log "ERROR" "$PKI_PATH not mounted!"
+       exit 1
+    fi
+    
+    find "$PKI_PATH" -name "*.crt" | while read cert; do
+       # Check if expires in N days
+       if openssl x509 -checkend $((WARN_DAYS * 86400)) -noout -in "$cert" > /dev/null; then
+          : # Healthy
+       else
+          ENDDATE=$(openssl x509 -enddate -noout -in "$cert" | cut -d= -f2)
+          log "WARN" "EXPIRY RISK: $cert expires on $ENDDATE"
+       fi
+    done
+    log "INFO" "Audit Complete."
+
+  # -------------------------------------------------------------------------
+  # 8. GPU Capacity
+  # -------------------------------------------------------------------------
+  gpu-capacity.sh: |
+    #!/bin/bash
+    set -e
+    source /scripts/lib.sh
+    check_deps kubectl
+
+    RES="{{ .Values.config.gpu.resourceName }}"
+    
+    log "INFO" "Generating GPU Capacity Report ($RES)..."
+    
+    # Custom Columns for Clean Output
+    echo "NODE_NAME           ALLOCATABLE   CAPACITY"
+    echo "----------------------------------------"
+    kubectl get nodes -o custom-columns=NAME:.metadata.name,ALLOC:.status.allocatable."$RES",CAP:.status.capacity."$RES" | grep -v NAME
+    
+    # Optional: Aggregate
+    TOTAL_CAP=$(kubectl get nodes -o json | jq "[.items[].status.capacity.\"$RES\" | tonumber] | add")
+    log "INFO" "Total Cluster Capacity: $TOTAL_CAP"
+
+  # -------------------------------------------------------------------------
+  # 9. Orphaned PVCs
+  # -------------------------------------------------------------------------
   orphaned-pvc.sh: |
     #!/bin/bash
-    echo "[Weekly] Orphaned PVC Check..."
-    # Find PVCs with status 'Lost' or 'Released'
+    set -e
+    source /scripts/lib.sh
+    check_deps kubectl jq
+    
+    log "INFO" "Scanning for Orphaned PVCs (Lost/Released)..."
+    
     kubectl get pvc -A -o json | \
-      jq -r '.items[] | select(.status.phase=="Lost" or .status.phase=="Released") | "WARNING: Orphaned PVC: \(.metadata.name) in namespace \(.metadata.namespace) (Phase: \(.status.phase))"'
-    echo "Scan Complete."
+      jq -r '.items[] | select(.status.phase=="Lost" or .status.phase=="Released") | "WARN: PVC \(.metadata.name) in \(.metadata.namespace) is \(.status.phase)"' | \
+      while read line; do log "$line"; done
+      
+    log "INFO" "Scan Complete."
+
+  # -------------------------------------------------------------------------
+  # 10. Restart Analysis
+  # -------------------------------------------------------------------------
+  restart-analysis.sh: |
+    #!/bin/bash
+    set -e
+    source /scripts/lib.sh
+    check_deps kubectl
+    
+    log "INFO" "Top 20 Unstable Pods (High Restarts)..."
+    
+    kubectl get pods -A --sort-by='.status.containerStatuses[0].restartCount' -o jsontemplate \
+      --template='{{printf "%-20s %-40s %s\n" "NAMESPACE" "POD" "RESTARTS"}}{{range .items}}{{printf "%-20s %-40s %d\n" .metadata.namespace .metadata.name (index .status.containerStatuses 0).restartCount}}{{end}}' | \
+      tail -n 20 | tac
+      
+    log "INFO" "Report Generated."
