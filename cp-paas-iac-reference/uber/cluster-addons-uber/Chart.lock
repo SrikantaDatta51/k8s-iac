@@ -14,5 +14,11 @@ dependencies:
 - name: calico-whisker-ui
   repository: file://../../components/addons/calico-whisker-ui/helm/calico-whisker-ui
   version: 0.1.4
-digest: sha256:38492e14dba4160fa49fa576751195a92c3c20cdaaa5d02a4a4e9b9f24012366
-generated: "2025-12-07T21:31:53.129813787-08:00"
+- name: proactive-management
+  repository: file://../../charts/proactive-management
+  version: 0.1.0
+- name: reactive-management
+  repository: file://../../charts/reactive-management
+  version: 0.1.0
+digest: sha256:d845480262fcb72d7a781eac09ceeb43a1f20ac2f239227150f36512570dd565
+generated: "2025-12-14T07:57:52.147737165-08:00"

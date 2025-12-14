@@ -43,19 +43,19 @@ graph TD
     User([Operator]) -->|GitOps| Repo[Git Repository]
     Repo -->|Sync| Argo[ArgoCD (Command Cluster)]
     
-    subgraph "Command Cluster (Hub)"
+    subgraph "Command Cluster - Hub"
         Argo
         Karmada[Karmada Control Plane]
         Gitea[Gitea Source]
     end
     
-    subgraph "GPU Cluster (Spoke A)"
+    subgraph "GPU Cluster - Spoke A"
         GPU_Worker[GPU Nodes]
         Proactive_A[Proactive Maintenance]
         Reactive_A[Reactive Self-Healing]
     end
     
-    subgraph "CPU Cluster (Spoke B)"
+    subgraph "CPU Cluster - Spoke B"
         CPU_Worker[CPU Nodes]
         Proactive_B[Proactive Maintenance]
         Reactive_B[Reactive Self-Healing]

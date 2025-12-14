@@ -2,21 +2,28 @@ apiVersion: v2
 name: cluster-addons-uber
 description: Uber chart for cluster add-ons
 type: application
-version: 0.1.4
+version: 0.2.0
 
 dependencies:
   - name: cni-core
-    version: 0.1.4
+    version: 0.2.0
     repository: "file://../../components/addons/cni-core/helm/cni-core"
   - name: multus-core
-    version: 0.1.4
+    version: 0.2.0
     repository: "file://../../components/addons/multus-core/helm/multus-core"
   - name: nvidia-network-operator
-    version: 0.1.4
+    version: 0.2.0
     repository: "file://../../components/addons/nvidia-network-operator/helm/nvidia-network-operator"
   - name: nvidia-gpu-operator
-    version: 0.1.4
+    version: 0.2.0
     repository: "file://../../components/addons/nvidia-gpu-operator/helm/nvidia-gpu-operator"
   - name: calico-whisker-ui
-    version: 0.1.4
+    version: 0.2.0
     repository: "file://../../components/addons/calico-whisker-ui/helm/calico-whisker-ui"
+  - name: proactive-management
+    version: 0.1.0
+    repository: "file://../../charts/proactive-management"
+  - name: reactive-management
+    version: 0.1.0
+    repository: "file://../../charts/reactive-management"
+
