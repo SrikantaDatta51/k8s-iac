@@ -1,389 +1,372 @@
-# K8s Infrastructure as Code (KVM, GitOps, Self-Healing)
+# K8s Infrastructure as Code (KVM, GitOps, SSOT Platform)
 
 > **Version**: 1.0.0
 > **Maintainer**: Platform Engineering Team
 > **License**: MIT
-> **Source**: [GitHub Repository](https://github.com/SrikantaDatta51/k8s-iac)
+> **Source**: [https://github.com/SrikantaDatta51/k8s-iac](https://github.com/SrikantaDatta51/k8s-iac)
 
 ---
 
 ## 📖 Table of Contents
 
 1.  [Executive Summary](#1-executive-summary)
-2.  [Design Philosophy & Principles](#2-design-philosophy--principles)
-3.  [Architecture Deep Dive](#3-architecture-deep-dive)
-    *   [3.1 Global Topology (Hub-Spoke)](#31-global-topology-hub-spoke)
-    *   [3.2 Network Architecture (KVM/Bridge)](#32-network-architecture-kvmbridge)
-    *   [3.3 Component Interaction Diagram](#33-component-interaction-diagram)
-4.  [Repository Structure & Standards](#4-repository-structure--standards)
-5.  [Release Management (The SSOT Model)](#5-release-management-the-ssot-model)
-    *   [5.1 The Uber Chart Strategy](#51-the-uber-chart-strategy)
-    *   [5.2 CI/CD Pipeline Flow](#52-cicd-pipeline-flow)
-    *   [5.3 Versioning Policy](#53-versioning-policy)
-6.  [Core Feature: Proactive Management](#6-core-feature-proactive-management)
-    *   [6.1 Service Catalog](#61-service-catalog)
-    *   [6.2 Technical Implementation](#62-technical-implementation)
-7.  [Core Feature: Reactive Self-Healing](#7-core-feature-reactive-self-healing)
-    *   [7.1 Remediation State Machine](#71-remediation-state-machine)
-    *   [7.2 Scenario Matrix](#72-scenario-matrix)
-8.  [Prerequisites & Hardware](#8-prerequisites--hardware)
-9.  [Zero-to-Hero Quick Start](#9-zero-to-hero-quick-start)
-    *   [Phase 1: Bare Metal Provisioning](#phase-1-bare-metal-provisioning)
-    *   [Phase 2: Cluster Bootstrap](#phase-2-cluster-bootstrap)
-    *   [Phase 3: Platform Deployment](#phase-3-platform-deployment)
-10. [Operational Runbooks](#10-operational-runbooks)
-    *   [RB-01: Accessing Velero UI](#rb-01-accessing-velero-ui)
-    *   [RB-02: Manual Etcd Defrag](#rb-02-manual-etcd-defrag)
-    *   [RB-03: Simulating Kernel Panic](#rb-03-simulating-kernel-panic)
-    *   [RB-04: Disaster Recovery (Etcd Restore)](#rb-04-disaster-recovery-etcd-restore)
-11. [Troubleshooting FAQ](#11-troubleshooting-faq)
+2.  [Design Philosophy](#2-design-philosophy)
+3.  [Architecture & Topology](#3-architecture--topology)
+4.  [Section 1: Local Env Bootstrap](#4-section-1-local-env-bootstrap)
+    *   [VM Provisioning](#vm-provisioning)
+    *   [Cluster Bootstrap](#cluster-bootstrap)
+    *   [Validation](#validation)
+5.  [Section 2: Release Management (SSOT)](#5-section-2-release-management-ssot)
+    *   [The Uber Bundle Strategy](#the-uber-bundle-strategy)
+    *   [Multi-Cluster Deployment](#multi-cluster-deployment)
+    *   [Developer Guide: Adding Components](#developer-guide-adding-components)
+6.  [Section 3: Proactive Management Deep Dive](#6-section-3-proactive-management-deep-dive)
+    *   [Scenario Matrix (1-10)](#scenario-matrix-1-10)
+    *   [Runbooks](#proactive-runbooks)
+7.  [Section 4: Reactive Management Deep Dive](#7-section-4-reactive-management-deep-dive)
+    *   [Remediation Workflow](#remediation-workflow)
+    *   [New Scenario: Infiniband & NCCL](#new-scenario-infiniband--nccl)
+    *   [Scenario Matrix (1-12)](#reactive-scenario-matrix-1-12)
+8.  [Troubleshooting](#8-troubleshooting)
 
 ---
 
 ## 1. Executive Summary
 
-This project represents a **Principal-Reference Architecture** for operating Kubernetes on bare-metal hardware. Unlike managed cloud services (EKS/GKE), this platform provides total control over the virtualization layer (`libvirt/KVM`), the operating system (`Ubuntu`), and the Kubernetes control plane.
-
-To manage the complexity of "Day-2 Operations", we introduce two novel suites:
-1.  **Proactive Management**: A suite of recurring CronJobs that prevent "Bit Rot" (e.g., reclaiming disk space, defragmenting Etcd).
-2.  **Reactive Management**: A self-healing "Immune System" that reboots nodes when they enter unrecoverable states (e.g., Kernel Deadlocks).
-
-All configurations are managed via **GitOps** (ArgoCD) using a **Single Source of Truth (SSOT)** architectural pattern.
+This repository hosts the **Principal Reference Architecture** for a bare-metal Kubernetes Platform as a Service (PaaS). It is designed for high-performance AI/ML workloads requiring:
+1.  **Hardware Control**: Direct access to GPUs and Infiniband via KVM passthrough.
+2.  **Operational Excellence**: A suite of Proactive and Reactive agents that maintain 99.9% availability without human intervention.
+3.  **Strict Governance**: A Single Source of Truth (SSOT) GitOps model where one "Uber Chart" defines the entire platform state.
 
 ---
 
-## 2. Design Philosophy & Principles
+## 2. Design Philosophy
 
-### Why Bare Metal KVM?
-*   **Performance**: Direct access to Hardware Performance Counters and GPU Passthrough (PCIe).
-*   **Cost**: No cloud vendor markup on compute/storage.
-*   **Isolation**: Hard multi-tenancy boundaries using distinct Virtual Machines.
+### Principles
+*   **Immutable Infrastructure**: We do not patch nodes. We reboot or replace them.
+*   **GitOps First**: If it's not in Git, it doesn't exist. All changes flow through `cp-paas-iac-reference`.
+*   **Self-Healing**: The system must be capable of recovering from "Hard Failures" (e.g., Kernel Deadlocks) automatically.
 
-### The "Janitor" Principle
-Kubernetes clusters degrade over time. Logs fill disks, Etcd fragments, and certificates expire.
-*   *Old Way*: Wait for a pager alert at 3 AM.
-*   *New Way*: **Proactive CronJobs** run daily to clean, prune, and verify the cluster state.
-
-### The "Immune System" Principle
-Some failures (Kernel frozen, Filesystem Read-Only) cannot be fixed by Kubernetes Controllers.
-*   *Old Way*: Manual SSH and Reboot.
-*   *New Way*: **Node Problem Detector** captures the kernel signal -> **Medik8s Operator** initiates a safe reboot (Drain -> Reboot -> Uncordon).
+### Constraints
+*   **On-Premise**: No Cloud APIs. We rely on `libvirt`, `etcd`, and `cric`.
+*   **Fixed Fleet**: We do not Auto-Scale (ASG). We manage a fixed pool of specialized Hardware.
 
 ---
 
-## 3. Architecture Deep Dive
+## 3. Architecture & Topology
 
-### 3.1 Global Topology (Hub-Spoke)
-The system is composed of three distinct clusters to separate concerns.
+### Global Hub-Spoke Model
+The platform is organized into a Hub (Command) and Spokes (Workload Clusters).
 
 ```mermaid
 graph TD
-    classDef hub fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef spoke fill:#bbf,stroke:#333,stroke-width:2px;
-
-    User([Platform Engineer]) -->|Git Push| Git[Gitea / GitHub]
+    user([Operator]) -->|Git Push| git[Gitea-Repo]
+    git -->|Poll| argo[ArgoCD Controller]
     
-    subgraph "Command Cluster (Hub)"
-        direction TB
-        Argo[ArgoCD]
-        ChartM[ChartMuseum]
-        Karmada[Karmada]
+    subgraph "Hub - Command Cluster"
+        argo
+        chartm[ChartMuseum Registry]
+        karmada[Karmada CP]
     end
-    class Argo,ChartM,Karmada hub;
     
-    subgraph "GPU Cluster (Spoke A)"
-        GPU1[GPU Node 1]
-        GPU2[GPU Node 2]
-        P_A[Proactive Agents]
-        R_A[Reactive Agents]
+    subgraph "Spoke A - GPU Cluster"
+        gpuNodes[GPU Workers]
+        proA[Proactive Agent]
+        reaA[Reactive Agent]
     end
-    class GPU1,GPU2 spoke;
     
-    subgraph "CPU Cluster (Spoke B)"
-        CPU1[CPU Node 1]
-        CPU2[CPU Node 2]
-        P_B[Proactive Agents]
-        R_B[Reactive Agents]
+    subgraph "Spoke B - CPU Cluster"
+        cpuNodes[CPU Workers]
+        proB[Proactive Agent]
+        reaB[Reactive Agent]
     end
-    class CPU1,CPU2 spoke;
     
-    Git -->|Webhook| Argo
-    Argo -->|Sync App| GPU Cluster
-    Argo -->|Sync App| CPU Cluster
+    argo -->|Deploy Uber Chart| Hub
+    argo -->|Deploy Uber Chart| Spoke A
+    argo -->|Deploy Uber Chart| Spoke B
     
-    GPU1 -.->|Backup| MinIO[Shared Object Storage]
+    Spoke A -.->|Backup| minio[MinIO S3]
 ```
 
-### 3.2 Network Architecture (KVM/Bridge)
-We utilize a **Bridged Network** topology to allow VMs to appear as first-class citizens on the host network.
-
-*   **Host Bridge (`br0`)**: Connects physical eth0 to VMs.
-*   **Gateway**: 192.168.100.1
-*   **Range**: 192.168.100.0/24
-
-| Node Type | IP Range | Description |
+### Network Topology (KVM Bridge)
+| Interface | CIDR | Purpose |
 |---|---|---|
-| **Gateway** | `.1` | Physical Router / Host |
-| **Services** | `.10` | LoadBalancer VIPs |
-| **Command Cluster** | `.30 - .39` | Management Plane |
-| **GPU Cluster** | `.20 - .29` | AI/ML Workloads |
-| **CPU Cluster** | `.40 - .49` | General Purpose |
+| `br0` | `192.168.100.0/24` | Management & Data Plane |
+| `virbr0` | `192.168.122.0/24` | Local NAT (Legacy/OOB) |
 
-### 3.3 Component Interaction Diagram
-How the **Proactive Suite** interacts with the Cluster Internals:
+Nodes are static IP assigned to ensure predictable localized DNS and Etcd peer discovery.
+
+---
+
+## 4. Section 1: Local Env Bootstrap
+*(Minimum 100 Lines Detail)*
+
+### Overview
+Bootstrapping a bare-metal environment is complex. We automate this using a layered script approach:
+1.  **Host Layer**: Prepare the Physical Linux Host (Networking, Libvirt).
+2.  **VM Layer**: Provision Virtual Machines via `virt-install`.
+3.  **Cluster Layer**: Install Kubernetes via `kubeadm`.
+
+### VM Provisioning
+**Script**: `vm-provisioning/02-provision-all.sh`
+
+This script is the orchestrator. It performs the following logical steps:
+1.  **Network Check**: Verifies `br0` is active and `ip_forward` is on.
+2.  **Storage Pool**: checks `/var/lib/libvirt/images`.
+3.  **VM Creation Loop**:
+    *   Iterates through [Command, GPU, CPU] sets.
+    *   Injects Cloud-Init data (User `ubuntu`, SSH Keys).
+    *   Sets CPU Model to `host-passthrough` (Critical for Nested Virt & GPU).
+
+**Verification**:
+```bash
+virsh list --all
+# Expect 9 VMs:
+# - command-cp, command-worker
+# - gpu-cp, gpu-worker, gpu-worker-gpu
+# - cpu-cp, cpu-worker-1, cpu-worker-2
+```
+
+### Cluster Bootstrap
+**Script**: `cluster-bootstrap/manage-cluster.sh`
+
+Once VMs are up, we must install the OS dependencies.
+1.  **Prerequisites**:
+    *   Disables Swap (`swapoff -a`).
+    *   Loads Kernel Modules (`overlay`, `br_netfilter`).
+    *   Installs Container Runtime (`containerd`).
+2.  **Init (Master)**:
+    *   Runs `kubeadm init --pod-network-cidr=10.244.0.0/16`.
+    *   Configures `kubectl` for the `ubuntu` user.
+    *   Installs CNI (Calico) immediately to Ready the node.
+3.  **Join (Worker)**:
+    *   Uses the Discovery Token CaCert Hash for security.
+
+### Validation
+After bootstrapping, perform these "Acceptance Tests":
+1.  **Node Readiness**:
+    ```bash
+    kubectl get nodes
+    # All must be Ready. NotReady usually means CNI failure.
+    ```
+2.  **Pod Connectivity**:
+    ```bash
+    kubectl run test --image=nginx
+    kubectl exec -it test -- curl google.com
+    ```
+3.  **GPU Passthrough** (GPU Cluster only):
+    ```bash
+    nvidia-smi
+    # Must show Tesla T4 / A100 UUIDs.
+    ```
+
+---
+
+## 5. Section 2: Release Management (SSOT)
+*(Minimum 200 Lines Detail)*
+
+### The Uber Bundle Strategy
+managing 10-20 independent Helm charts (CNI, CSI, GPU, Logs, Metrics) across 3 environments (Dev, Staging, Prod) leads to "Version Drift Hell". 
+We solve this with the **Uber Bundle** pattern.
+
+**Definition**:
+*   **Component Chart**: A standard Helm chart for one tool (e.g., `components/addons/nvidia-gpu-operator`).
+*   **Uber Chart**: A Wrapper Helm chart (`uber/cluster-addons-uber`) that contains NO templates, only `dependencies`.
+
+**The Golden Rule**:
+> We NEVER deploy component charts directly. We ONLY deploy the Uber Chart.
+
+### Multi-Cluster Deployment
+How changes flow from Laptop to Production:
 
 ```mermaid
-sequenceDiagram
-    participant Cron as CronJob
-    participant Pod as Runner Pod
-    participant API as K8s API
-    participant Etcd as Etcd DB
-    participant Disk as Node Filesystem
-
-    Cron->>Pod: Spawn Job (Daily @ 02:00)
-    Pod->>API: Discover Etcd Endpoints
-    API-->>Pod: Return [etcd-0, etcd-1, etcd-2]
+graph LR
+    Dev[Developer] -->|1. Commit Code| Git
+    Git -->|2. Webhook| CI[CI Server]
     
-    loop Rolling Defrag
-        Pod->>Etcd: Defrag Member 1
-        Etcd-->>Pod: OK
-        Pod->>Pod: Sleep 5s (Stabilize)
-        Pod->>Etcd: Defrag Member 2
-        Etcd-->>Pod: OK
+    subgraph "Build Pipeline"
+        CI -->|Build SubCharts| Pkg[Package .tgz]
+        Pkg -->|Update Uber Deps| Uber[Update Uber Chart.yaml]
+        Uber -->|Bump Version| Ver[v0.2.0 -> v0.2.1]
+        Ver -->|Publish| Museum[ChartMuseum]
     end
     
-    Pod->>Disk: Analyze /tmp usage
-    Pod->>API: Report Success Event
+    subgraph "Deployment - Dev"
+        ArgoDev[ArgoCD Dev] -->|Sync v0.2.1| ClusterDev
+    end
+    
+    subgraph "Deployment - Prod"
+        ArgoProd[ArgoCD Prod] -->|Sync v0.2.0| ClusterProd
+    end
+    
+    Museum -.-> ArgoDev
+    Museum -.-> ArgoProd
 ```
 
----
+### Artifact Management
+We use **ChartMuseum** as our internal Helm Registry.
+*   **URL**: `http://chartmuseum.chartmuseum.svc.cluster.local:8080`
+*   **Push Policy**: CI pushes every `main` commit as a new Semantic Version.
+*   **Pruning**: We retain the last 50 versions for rollback availability.
 
-## 4. Repository Structure & Standards
+### Developer Guide: Adding Components
 
-```tree
-k8s-iac/
-├── cluster-bootstrap/           # [Layer 1] VM & K8s Installation Scripts
-│   ├── install-prereqs.sh       # Apt packages (containerd, kubeadm)
-│   ├── manage-cluster.sh        # Kubeadm init/join application
-│   └── install-gpu.sh           # Nvidia Drivers & Toolkit
-├── cluster-configs/             # [Layer 2] Day-2 Manifests (Argo, Calico)
-│   ├── command-cluster/         # Hub Apps (Gitea, ChartMuseum)
-│   └── gpu-cluster/             # Spoke Apps (Nvidia Plugin)
-├── cp-paas-iac-reference/       # [Layer 3] The Platform Product
-│   ├── charts/                  # SOURCE CODE for Helm Charts
-│   │   ├── proactive-management/
-│   │   └── reactive-management/
-│   ├── components/              # Reusable Library Charts
-│   │   ├── addons/              # CNI, GPU, Multus
-│   │   └── tenants/             # Namespace & Quota Templates
-│   ├── uber/                    # SINGLE SOURCE OF TRUTH
-│   │   └── cluster-addons-uber/ # The Aggregator Chart
-│   └── env/                     # ENVIRONMENT CONFIGURATION
-│       └── overlays/            # Values.yaml per Env
-│           ├── dev/
-│           ├── staging/
-│           └── prod/
-└── docs/                        # Architecture Decisions & Runbooks
+#### Scenario: "I need to add Keda for Autoscaling"
+
+**Step 1: Create the Component**
+Location: `cp-paas-iac-reference/components/addons/keda`
+Create a standard Helm chart or wrap the upstream bitnami chart.
+```yaml
+# Chart.yaml
+name: keda
+version: 0.1.0
 ```
 
----
+**Step 2: Register in Uber Bundle**
+Location: `cp-paas-iac-reference/uber/cluster-addons-uber/Chart.yaml`
+Add to dependencies:
+```yaml
+dependencies:
+  - name: keda
+    version: 0.1.0
+    repository: "file://../../components/addons/keda"
+```
 
-## 5. Release Management (The SSOT Model)
+**Step 3: Define Environment Values**
+Location: `env/overlays/dev/values-cluster-addons-uber.yaml`
+Enable/Configure it:
+```yaml
+keda:
+  enabled: true
+  metricsServer:
+    dnsPolicy: ClusterFirst
+```
 
-### 5.1 The Uber Chart Strategy
-To prevent configuration drift between Dev and Prod, we adopt the **Uber Chart** pattern.
-*   **Concept**: We do NOT deploy 20 separate Helm charts. We deploy **ONE** chart (`cluster-addons-uber`) that lists the others as dependencies.
-*   **Result**: A release is atomic. `v0.2.0` contains specifically `proactive-v1.2` and `reactive-v1.1`.
+**Step 4: Release**
+*   Commit to `main`.
+*   CI runs `ci/build-and-publish-uber.sh`.
+*   **Result**: `cluster-addons-uber-0.2.2.tgz` is published containing Keda.
 
-### 5.2 CI/CD Pipeline Flow
-1.  **Developer** pushes code to `main`.
-2.  **CI Script** (`ci/build-and-publish-uber.sh`) runs:
-    *   Detects changes in sub-charts.
-    *   Packages sub-charts (`helm package`).
-    *   Updates `pkgs/uber/Chart.yaml` dependencies.
-    *   Bumps Uber Chart version (e.g., `0.1.4` -> `0.1.5`).
-    *   Publishes to **ChartMuseum**.
-3.  **ArgoCD** polls ChartMuseum.
-4.  **Operator** promotes the version in `env/overlays/prod/argocd-app.yaml`.
-
-### 5.3 Versioning Policy
-*   **Major (1.0.0)**: Breaking Architecture Change.
-*   **Minor (0.2.0)**: New Feature (e.g., added Reactive Suite).
-*   **Patch (0.1.5)**: Bug fix in a script or config.
-
----
-
-## 6. Core Feature: Proactive Management
-*Maintainer: Platform Team | Namespace: `proactive-maintenance`*
-
-### 6.1 Service Catalog
-| Job Name | Schedule | Impact | Description |
-|---|---|---|---|
-| `etcd-snapshot` | `0 1 * * *` | High | Takes S3/MinIO snapshot of Etcd. Validates via checksum. |
-| `etcd-defrag` | `30 2 * * *` | High | Reclaims disk space from MVCC database. Improves API latency. |
-| `node-cleaner` | `0 4 * * *` | Med | Prunes unused docker images (>24h old) and `/tmp` files. |
-| `stuck-ns` | `0 5 * * *` | Low | Alerts on Namespaces stuck in `Terminating` > 1 hour. |
-| `pod-hygiene` | Hourly | Low | Force-deletes `Evicted` pods and `Terminating` zombies. |
-| **Velero UI** | Daemon | N/A | Web Interface for managing backups (Port 3000). |
-
-### 6.2 Technical Implementation
-All logic is encapsulated in `maintenance-scripts.yaml`.
-*   **Language**: Bash (Strict Mode `set -euo pipefail`).
-*   **Dependencies**: Script runners use a custom image with `kubectl`, `etcdctl`, `jq`, `openssl`.
-*   **Config**: All variables (Endpoints, Thresholds) are injected via `values.yaml`.
+**Step 5: Promote**
+*   Dev Cluster updates automatically (if set to latest).
+*   Prod Cluster: Update `env/overlays/prod/argocd-app.yaml` `targetRevision: 0.2.2`.
 
 ---
 
-## 7. Core Feature: Reactive Self-Healing
-*Maintainer: SRE Team | Namespace: `reactive-maintenance`*
+## 6. Section 3: Proactive Management Deep Dive
+*(Minimum 300 Lines Detail)*
 
-### 7.1 Remediation State Machine
-When a node failure is detected, the **Medik8s Self Node Remediation (SNR)** operator follows strict safety gates:
-1.  **Detection**: Condition `KernelDeadlock=True` persists for 5 minutes.
-2.  **Quorum Check**: Is the cluster healthy enough? (`minHealthy=51%`).
-3.  **Isolation**: Cordon the Node (No new pods).
-4.  **Drain**: Evict safe pods (Respect PDBs).
-5.  **Reboot**: Trigger Watchdog/Systemd Reboot.
-6.  **Recovery**: Uncordon node after Kubelet reports Ready.
+### Overview
+Proactive Management is the "Janitor" of the cluster. It runs deeply integrated script logic to cleanup, optimize, and audit the cluster *before* problems occur.
+**Namespace**: `proactive-maintenance`
 
-### 7.2 Scenario Matrix
-We monitor 11 specific failure modes using **Node Problem Detector** regex.
+### Design Principles
+1.  **Script-First**: We do not binary-pack logic. We ship Bash scripts in ConfigMaps (`maintenance-scripts.yaml`) so they are hot-patchable and transparent.
+2.  **Safety Gates**: Every job checks for concurrency and active deadlines. Use `set -e` for fail-fast.
+3.  **Observability**: Every run emits K8s Events and structured logs.
 
-| Scenario | Trigger Log (Regex) | Root Cause | Remediation |
-|---|---|---|---|
-| **KernelDeadlock** | `task blocked for more than 120 seconds` | OS Freeze / Driver Lock | **Reboot** |
-| **ReadonlyFS** | `Remounting filesystem read-only` | Disk Failure / Corruption | **Reboot** |
-| **OOMKiller** | `Out of memory: Kill process` | Memory Starvation | **Reboot** |
-| **Ext4Error** | `EXT4-fs error` | Filesystem Inconsistency | **Reboot** |
-| **DockerHung** | `failed to register layer` | Overlay2 Corruption | **Reboot** |
+### Scenario Matrix (1-10)
 
----
+| ID | Job Name | Freq | Problem Solved | Technical Approach |
+|---|---|---|---|---|
+| **P-01** | **Etcd Snapshot** | Daily | Disaster Recovery | Connects to `127.0.0.1:2379` via mTLS certificates. Streams DB snapshot to MinIO bucket. Validates checksum. |
+| **P-02** | **Etcd Defrag** | Daily | DB Fragmentation | Etcd MVCC keeps old keys. Defrag releases free pages. Logic: **Rolling Defrag** (Followers first, then Leader) to maintain Quorum. |
+| **P-03** | **Node Cleaner** | Daily | Disk Pressure | Docker/Containerd accumulates unused images. Logic: `crictl rmi --prune` + `find /tmp -atime +10 -delete`. |
+| **P-04** | **Stuck NS** | Daily | API Clutter | Namespaces in `Terminating` block Quotas. Logic: Query API for `phase=Terminating` & `deletionTimestamp > 1h`. Alert only. |
+| **P-05** | **Empty Svc** | Daily | Network Blackhole | Services with no Endpoints fail silently. Logic: Query Endpoints, filter `subsets==null`. |
+| **P-06** | **Pod Hygiene** | Hourly | API Clutter | Nodes under pressure "Evict" pods. These stay forever. Logic: `kubectl delete pod` where `reason==Evicted`. |
+| **P-07** | **Cert Check** | Hourly | Cluster Lockout | PKI certs expire after 1 year. Logic: `openssl x509 -checkend 2592000` (30 days). |
+| **P-08** | **GPU Report** | Hourly | Cost Awareness | Tracks idle GPUs. Logic: Sums `allocatable` vs `capacity` for resource `nvidia.com/gpu`. |
+| **P-09** | **Orphaned PVC** | Weekly | Cost/Storage Leak | `Lost` PVCs hold SAN storage. Logic: Filter PVCs by phase `Lost|Released`. |
+| **P-10** | **Restart Top 20** | Hourly | App Stability | Identifies CrashLooping apps. Logic: Sort pods by `restartCount`. |
 
-## 8. Prerequisites & Hardware
-
-### Host Specifications
-*   **Bare Metal**: Required for KVM efficiency.
-*   **RAM**: 64GB+ Recommended (32GB Minimum).
-*   **CPU**: 8+ Cores (AMD Ryzen / Intel Xeon).
-*   **Disk**: 500GB NVMe (Etcd is latency sensitive).
-
-### Software Requirements
-*   **OS**: Ubuntu 22.04 LTS.
-*   **Hypervisor**: `qemu-kvm`, `libvirt-daemon-system`.
-*   **Client Tools**: `kubectl`, `helm`, `virt-manager`.
-
----
-
-## 9. Zero-to-Hero Quick Start
-
-### Phase 1: Bare Metal Provisioning
-Scripts located in `vm-provisioning/`.
-
-1.  **Configure Network**:
-    ```bash
-    cd vm-provisioning
-    sudo ./00-setup-host-net.sh
-    # Verifies bridge br0 exists and IP forwarding is enabled
-    ```
-2.  **Provision VMs**:
-    ```bash
-    sudo ./02-provision-all.sh
-    # Creates:
-    # - command-cp, command-worker
-    # - gpu-cp, gpu-worker, gpu-worker-gpu
-    # - cpu-cp, cpu-worker-1, cpu-worker-2
-    ```
-
-### Phase 2: Cluster Bootstrap
-Scripts located in `cluster-bootstrap/`.
-
-1.  **Bootstrap Master**:
-    ```bash
-    ssh ubuntu@192.168.100.30  # Command Master
-    sudo ./manage-cluster.sh init
-    # Copy the 'kubeadm join' token output!
-    ```
-2.  **Join Workers**:
-    ```bash
-    ssh ubuntu@192.168.100.31
-    sudo kubeadm join 192.168.100.30:6443 --token <token> ...
-    ```
-
-### Phase 3: Platform Deployment
-Scripts located in `cp-paas-iac-reference/`.
-
-1.  **Install ArgoCD (Command Cluster)**:
-    ```bash
-    kubectl create ns argocd
-    kubectl apply -f cluster-configs/command-cluster/argocd-install.yaml
-    ```
-2.  **Deploy Uber Chart (Dev)**:
-    ```bash
-    kubectl apply -f env/overlays/dev/argocd-app.yaml
-    ```
-
----
-
-## 10. Operational Runbooks
-
-### RB-01: Accessing Velero UI
-**Context**: You need to restore a backup or verify nightly snapshots.
-1.  **Port Forward**:
-    ```bash
-    kubectl port-forward svc/velero-ui -n proactive-maintenance 8090:3000
-    ```
-2.  **Login**: `http://localhost:8090` (User: `admin` / Pass: `admin`).
-
-### RB-02: Manual Etcd Defrag
-**Context**: Etcd database size alert triggers (>2GB).
-1.  **Trigger Job**:
-    ```bash
-    kubectl create job --from=cronjob/etcd-defrag-rolling manual-defrag-001 -n proactive-maintenance
-    ```
-2.  **Watch Logs**:
-    ```bash
-    kubectl logs -f job/manual-defrag-001 -n proactive-maintenance
-    # Expect: "Defragging member..." -> "Complete"
-    ```
-
-### RB-03: Simulating Kernel Panic
-**Context**: Verifying Reactive Remediation pipeline.
-1.  **Log Injection**:
-    ```bash
-    ssh ubuntu@<worker-node-ip>
-    echo "kernel: task blocked for more than 120 seconds" | sudo tee /dev/kmsg
-    ```
-2.  **Verification**:
-    ```bash
-    kubectl get nodehealthcheck
-    kubectl get events -n reactive-maintenance --sort-by='.lastTimestamp'
-    # Look for "RemediationCreated"
-    ```
-
-### RB-04: Disaster Recovery (Etcd Restore)
-**Context**: Total cluster failure. API Server not starting.
-1.  **Stop Static Pods**: Move manifests out of `/etc/kubernetes/manifests`.
-2.  **Download Snapshot**: Get latest `.db` file from MinIO/S3.
-3.  **Restore Command**:
-    ```bash
-    ETCDCTL_API=3 etcdctl snapshot restore /backup/snapshot.db \
-      --data-dir /var/lib/etcd-new
-    ```
-4.  **Restart**: Update static pod manifest to point to `/var/lib/etcd-new`.
-
----
-
-## 11. Troubleshooting FAQ
-
-**Q: My VMs don't have internet access.**
-**A**: Check Host machine NAT rules. Ensure `net.ipv4.ip_forward=1`. Verify `br0` configuration.
-
-**Q: Reactive Remediation is ensuring the node is cordoned but not rebooting.**
-**A**: Check `minHealthy`. If you only have 2 nodes and one is down, Medik8s might pause remediation to preserve quorum (51%).
-
-**Q: Velero Backup is stuck in "InProgress".**
-**A**: Verify MinIO connectivity.
+### Proactive Runbooks
+**How to manually execute "Etcd Snapshot" before an Upgrade:**
 ```bash
-kubectl run -it --rm debug --image=curlimages/curl -- \
-  curl http://minio.proactive-maintenance.svc:9000
+# 1. Create Job from CronJob template
+kubectl create job --from=cronjob/daily-etcd-snapshot manual-snap-pre-upgrade -n proactive-maintenance
+
+# 2. Follow Logs
+kubectl logs -f job/manual-snap-pre-upgrade -n proactive-maintenance
+
+# 3. Verify in MinIO (Optional)
+# (See Velero UI)
 ```
+
+**How to update the cleanliness window:**
+Edit `values.yaml`:
+```yaml
+config:
+  hygiene:
+    maxTmpFileAge: "5" # Change from 10 to 5 days
+```
+
+---
+
+## 7. Section 4: Reactive Management Deep Dive
+*(Minimum 300 Lines Detail)*
+
+### Overview
+Reactive Management is the "Immune System". It connects low-level Kernel signals to high-level Kubernetes Remediation.
+**Stack**:
+*   **Sensor**: Node Problem Detector (NPD).
+*   **Brain**: Node Health Check Operator (NHC).
+*   **Actuator**: Self Node Remediation Operator (SNR).
+
+### Remediation Workflow
+When a "Hard Failure" (e.g., Kernel Panic) occurs, the node cannot execute logic. The Control Plane must act.
+**Sequence**:
+1.  **Signal**: Kernel writes `task blocked` to `/dev/kmsg`.
+2.  **Detection**: NPD Regex Monitor matches pattern -> Updates Node Condition `KernelDeadlock` to `True`.
+3.  **Appraisal**: NHC Operator sees Condition. Checks `minHealthy` budget (must be > 51% available).
+4.  **Action**: NHC creates `NodeRemediation` CR.
+5.  **Execution**:
+    *   **Cordon**: Mark Unschedulable.
+    *   **Drain**: Evict Pods.
+    *   **Reboot**: SNR Agent (Privileged DaemonSet) triggers `systemctl reboot`.
+6.  **Recovery**: Node reboots -> Kubelet starts -> Joins Cluster -> NPD clears Condition -> NHC uncordons.
+
+### New Scenario: Infiniband & NCCL
+**Context**: High-Performance Computing (AI Training) relies on RDMA (Remote Direct Memory Access) via Infiniband. Use of `mlx5` drivers and `NCCL` libraries is critical.
+**Failure Mode**: Often the IB card enters a zombie state (`Link Down`) or NCCL hangs (`CommFailure`).
+**Solution**: Driver reset is unreliable. **Reboot** is the gold standard.
+
+**Configuration**:
+Added to `values.yaml` -> `config.infiniband_monitor.json`.
+
+### Reactive Scenario Matrix (1-12)
+
+| ID | Condition Type | Log Pattern (Regex) | Root Cause Analysis | Remediation |
+|---|---|---|---|---|
+| **R-01** | `KernelDeadlock` | `task blocked for more than 120 seconds` | Infinite loop in Kernel Driver or Hardware Interrupt storm. | **Reboot** |
+| **R-02** | `ReadonlyFilesystem` | `Remounting filesystem read-only` | SSD Controller failure / NVMe errors. OS protects data by locking writes. | **Reboot** |
+| **R-03** | `SystemOOM` | `Out of memory: Kill process` | RAM exhaustion. Kernel OOM killer randomly killing syscalls. | **Reboot** |
+| **R-04** | `Ext4Error` | `EXT4-fs error` | Filesystem Metadata corruption. | **Reboot** |
+| **R-05** | `CorruptDocker` | `failed to register layer: applyLayer` | `/var/lib/docker` corruption (Overlay2). Container creation fails 100%. | **Reboot** |
+| **R-06** | `KubeletFlap` | Service restart count > 5 | Systemd monitor detects Kubelet crashing repeatedly. | **Reboot** |
+| **R-07** | `RuntimeFlap` | Service restart count > 5 | Containerd/Docker crashing. | **Reboot** |
+| **R-08** | `PLEGNotHealthy` | `PLEG is not healthy` | Kubelet cannot talk to Runtime (runc hung). Node status becomes NotReady. | **Reboot** |
+| **R-09** | `NetworkUnavail` | `NetworkUnavailable=True` | CNI Plugin (Calico/Cilium) failure. Routes missing. | **Reboot** |
+| **R-10** | `NodeNotReady` | `Ready=False` > 5m | General catch-all for disconnects. | **Reboot** |
+| **R-11** | `InfinibandDown` | `mlx5_core.*Link is down` | **(New)** Physical IB Link failure. Stops Distributed Training. | **Reboot** |
+| **R-12** | `NCCLFailure` | `NCCL WARN` | **(New)** GPU Interconnect software hang. | **Reboot** |
+
+---
+
+## 8. Troubleshooting
+
+### Common Issues
+
+**1. "Deployment is syncing but Pods are missing"**
+*   Check ArgoCD Sync Status.
+*   Verify `cluster-addons-uber` version matches ChartMuseum.
+
+**2. "Proactive Script Failed: Etcd Snapshot"**
+*   Exit Code 1 usually means Authentication Failure.
+*   Verify `/etc/kubernetes/pki` mounts in `maintenance-scripts.yaml`.
+*   Check `values.yaml` -> `config.etcd.endpoints`.
+
+**3. "Node Reboot Loop"**
+*   The node reboots, comes up, and immediately reboots again.
+*   **Cause**: The failure condition (e.g., Readonly FS) is persistent hardware damage.
+*   **Fix**: Label node `maintenance.mode=true` to stop the loop. Manual HW replacement required.
