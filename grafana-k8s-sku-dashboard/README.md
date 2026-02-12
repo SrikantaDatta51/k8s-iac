@@ -1,70 +1,73 @@
-# K8s Pod Resources vs SKU Capacity — Grafana Dashboard
+# K8s Pod Resources vs SKU Capacity — Grafana Dashboard (v3)
 
-Monitors Kubernetes pod resource **requests, limits, and actual usage** against configurable **SKU capacity thresholds**, with real-time **violation detection** and **configurable units**.
+Monitors Kubernetes pod resource **requests, limits, and actual usage** against configurable **SKU capacity** with **violation detection**, covering **GPU, vCPU, Memory, VRAM, and Local Storage**.
 
 ## Prerequisites
 
 - **Grafana** >= 9.x
-- **Prometheus** datasource with:
-  - **kube-state-metrics**: `kube_pod_container_resource_requests`, `kube_pod_container_resource_limits`, `kube_pod_info`
-  - **cAdvisor** (kubelet): `container_cpu_usage_seconds_total`, `container_memory_working_set_bytes`, `container_fs_usage_bytes`
+- **Prometheus** with:
+  - **kube-state-metrics** — `kube_pod_container_resource_requests`, `kube_pod_container_resource_limits`, `kube_pod_info`
+  - **cAdvisor/kubelet** — `container_cpu_usage_seconds_total`, `container_memory_working_set_bytes`, `container_fs_usage_bytes`
+  - **DCGM Exporter** (for GPU/VRAM) — `DCGM_FI_DEV_GPU_UTIL`, `DCGM_FI_DEV_FB_USED`, `DCGM_FI_DEV_FB_FREE`
 
 ## Import
 
-1. Grafana → **Dashboards** → **Import** → upload `k8s-sku-dashboard.json`
-2. Select your Prometheus datasource
-3. Configure the SKU values and units in the top-level dropdowns
+Grafana → Dashboards → Import → upload `k8s-sku-dashboard.json`
 
-## Template Variables
+## Template Variables (10)
 
 | Variable | Type | Purpose | Default |
 |---|---|---|---|
-| **Prometheus Data Source** | Datasource | Select your Prometheus instance | — |
-| **Namespace** | Query | Auto-populated namespace list | — |
-| **Node** | Query | Filter by node (supports "All") | All |
-| **SKU: Total CPU (cores)** | Textbox | CPU capacity in cores | `128` |
-| **SKU: Total Memory** | Textbox | Memory capacity in selected unit | `22528` |
-| **Memory Display Unit** | Dropdown | GiB, MiB, TiB, GB, MB, TB, Bytes | GiB |
-| **SKU: Total Ephemeral Storage** | Textbox | Ephemeral capacity in selected unit | `10240` |
-| **Ephemeral Storage Display Unit** | Dropdown | GiB, MiB, TiB, GB, MB, TB, Bytes | GiB |
+| Prometheus Data Source | Datasource | Select Prometheus | — |
+| **Namespace** | Query | **Multi-select**, includes "All" | All |
+| **Node** | Query | **Multi-select**, includes "All" | All |
+| SKU: GPU Count | Textbox | GPUs per node | `8` |
+| SKU: vCPU Cores | Textbox | Total vCPUs | `128` |
+| SKU: Memory | Textbox | In selected unit below | `22528` |
+| **Memory Display Unit** | **Dropdown** | GiB/MiB/TiB/GB/MB/TB/Bytes | GiB |
+| SKU: VRAM (GiB) | Textbox | GPU memory | `640` |
+| SKU: Local Storage | Textbox | In selected unit below | `10240` |
+| **Storage Display Unit** | **Dropdown** | GiB/MiB/TiB/GB/MB/TB/Bytes | GiB |
 
-> **Important:** The SKU value textbox and the unit dropdown must use the same unit. If you select GiB and your SKU is 22 TiB, enter `22528` (= 22 × 1024).
-
-## Dashboard Layout (31 Panels)
+## Dashboard Layout (55 panels)
 
 ### SKU Violation Summary
-- **CPU / Memory / Ephemeral Status** — WITHIN LIMITS (green) or EXCEEDS SKU (red)
-- **SKU Capacity Utilization** — percentage consumed per dimension
-- **Total Running Pods** — pod count in selected namespace
-- **All Pods Table** — sortable table with CPU/Memory requests and limits, sum footer
+- 5 status indicators: GPU, vCPU, Memory, VRAM, Local Storage (WITHIN LIMITS / EXCEEDS SKU)
+- Violation descriptions showing why SKU is exceeded
 
-### Per-Dimension Rows (CPU, Memory, Ephemeral Storage)
+### Reservation vs Actual Utilization
+- 5 dual gauges showing reserved % and actual usage % per resource
+- Pod count + resource totals vs SKU capacity table
 
-Each dimension has 7 panels:
+### All Pods Table
+- Named columns: GPU/vCPU/Memory/Ephemeral Request and Limit (no more Value#A/B/C)
+- Shows pod, namespace, and node for cross-namespace visibility
+- Sum footer row
 
-| Panel | Type | What It Shows |
-|---|---|---|
-| Requests vs Limits per Pod | Bar chart | Grouped bars per pod |
-| Capacity vs SKU | Gauge | % of SKU consumed (green/orange/red) |
-| Absolute Totals | Stat | Total requests, limits, and SKU value |
-| Aggregate Over Time | Time series | Historical trend with red dashed SKU threshold line |
-| Request Size Distribution | Histogram | Distribution of per-pod request sizes |
-| **Per-Pod Usage vs Requests vs Limits** | Time series | Actual usage (solid), request (dashed), limit (dotted) per pod |
-| **Pods Exceeding Their Allocations** | Table | Pods where actual usage > request or > limit |
+### Per-Dimension Rows (GPU, vCPU, Memory, VRAM, Local Storage)
+Each has 7 panels:
+- Requests vs Limits per Pod (bar chart)
+- SKU Capacity Used (gauge)
+- Absolute Totals (stat)
+- Aggregate Reservation Over Time with SKU threshold line (time series)
+- **Reservation by Node — stacked** (heatmap-style, stacked bars per node)
+- **Per-Pod Actual Usage vs Requests vs Limits** (solid=usage, dashed=request, dotted=limit)
+- **Pods Exceeding Allocations** (table with named columns)
 
-## Units: GB vs GiB
+## Key Fixes in v3
 
-| | **GB (decimal)** | **GiB (binary)** |
-|---|---|---|
-| Bytes | 1 GB = 10^9 = 1,000,000,000 | 1 GiB = 2^30 = 1,073,741,824 |
-| Difference | — | ~7.37% larger than GB |
-| Used by | Disk vendors, cloud billing | **Kubernetes**, Linux kernel |
+| Issue | Fix |
+|---|---|
+| Namespace single-select only | Now **multi-select** with "All" option |
+| Node single-select only | Now **multi-select** with "All" option |
+| Table columns: Value#A, Value#B | Fixed via `renameByName` transformations |
+| No GPU/VRAM dimension | Added GPU Count + VRAM (DCGM metrics) |
+| Ephemeral storage empty | Uses `ephemeral-storage` resource + `container_fs_usage_bytes` |
+| No reason for violation | Added "Resource Totals vs SKU" panel showing absolutes |
+| No reservation vs utilization | Added dual gauges per resource |
+| No per-node view | Added stacked node reservation panels |
 
-Kubernetes reports memory/storage in **binary bytes**. The unit dropdown lets you choose the conversion divisor. The default is **GiB** to match `kubectl` output.
-
-## Regenerating the Dashboard
-
-The dashboard JSON is generated by `generate_dashboard.py`. To customize and regenerate:
+## Regenerate
 
 ```bash
 python3 generate_dashboard.py k8s-sku-dashboard.json
