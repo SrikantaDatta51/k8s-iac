@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Generate the K8s SKU Violation Grafana Dashboard JSON - v4.
-Fixes: GPU uses kube-state-metrics + Run.ai fallback, ephemeral uses
-kube_pod_container_resource_requests{resource="ephemeral-storage"},
-bar charts replaced with clean tables + heatmaps.
+"""Generate the K8s SKU Violation Grafana Dashboard JSON - v5.
+Fixes: ephemeral uses regex resource=~"ephemeral.storage" to match both
+hyphen and underscore variants, stacked graphs by pod not node,
+table legends with min/max on all timeseries, VRAM removed.
 """
 import json, sys
 
@@ -125,7 +125,8 @@ def ts_panel(title, desc, gp, targets, axis_label, unit="short",
                 "axisLabel": axis_label, "drawStyle": "line", "pointSize": 5,
                 "showPoints": "auto", "spanNulls": True}},
             "overrides": overrides},
-        "options": {"legend": {"displayMode": "list", "placement": "bottom"},
+        "options": {"legend": {"displayMode": "table", "placement": "bottom",
+                               "calcs": ["min", "max", "mean", "lastNotNull"]},
             "tooltip": {"mode": "multi", "sort": "desc"}},
         "targets": refs(targets)
     }
@@ -159,19 +160,20 @@ def per_pod_ts(title, desc, gp, usage_expr, req_expr, lim_expr, axis_label, unit
                          tgt(lim_expr, "{{pod}} Limit")])
     }
 
-def node_stacked(title, desc, gp, expr, axis_label):
+def pod_stacked(title, desc, gp, expr, axis_label, unit="short"):
+    """Stacked area chart by pod — shows per-pod contribution to total."""
     return {
         "id": nid(), "title": title, "description": desc, "type": "timeseries",
         "datasource": ds(), "gridPos": gp,
-        "fieldConfig": {"defaults": {"unit": "short",
+        "fieldConfig": {"defaults": {"unit": unit,
             "custom": {"lineWidth": 0, "fillOpacity": 80, "gradientMode": "scheme",
                 "axisLabel": axis_label, "drawStyle": "bars", "pointSize": 5,
                 "stacking": {"mode": "normal"}, "showPoints": "never"}},
             "overrides": []},
         "options": {"legend": {"displayMode": "table", "placement": "right",
-                               "calcs": ["lastNotNull", "max"]},
+                               "calcs": ["min", "max", "mean", "lastNotNull"]},
             "tooltip": {"mode": "multi", "sort": "desc"}},
-        "targets": refs([tgt(expr, "{{node}}")])
+        "targets": refs([tgt(expr, "{{pod}}")])
     }
 
 def abusing_table(title, desc, gp, usage_expr, req_expr, lim_expr):
@@ -222,16 +224,18 @@ def abusing_table(title, desc, gp, usage_expr, req_expr, lim_expr):
 #   and kube_pod_container_resource_limits{resource="ephemeral-storage"}.
 # ===================================================================
 
-def dim_exprs(resource, divisor):
-    """Generate standard PromQL expressions for a kube-state-metrics resource."""
+def dim_exprs(resource, divisor, use_regex=False):
+    """Generate standard PromQL expressions for a kube-state-metrics resource.
+    If use_regex=True, uses resource=~ for matching (e.g. ephemeral.storage)."""
     by_pod = 'pod, namespace, node'
     f = NSND
+    op = '=~' if use_regex else '='
     return {
-        "req_pod": f'sum by ({by_pod}) (kube_pod_container_resource_requests{{{f}, resource="{resource}"}}){divisor}',
-        "lim_pod": f'sum by ({by_pod}) (kube_pod_container_resource_limits{{{f}, resource="{resource}"}}){divisor}',
-        "req_total": f'sum(kube_pod_container_resource_requests{{{f}, resource="{resource}"}}){divisor}',
-        "lim_total": f'sum(kube_pod_container_resource_limits{{{f}, resource="{resource}"}}){divisor}',
-        "req_by_node": f'sum by (node) (kube_pod_container_resource_requests{{{NS}, resource="{resource}"}}){divisor}',
+        "req_pod": f'sum by ({by_pod}) (kube_pod_container_resource_requests{{{f}, resource{op}"{resource}"}}){divisor}',
+        "lim_pod": f'sum by ({by_pod}) (kube_pod_container_resource_limits{{{f}, resource{op}"{resource}"}}){divisor}',
+        "req_total": f'sum(kube_pod_container_resource_requests{{{f}, resource{op}"{resource}"}}){divisor}',
+        "lim_total": f'sum(kube_pod_container_resource_limits{{{f}, resource{op}"{resource}"}}){divisor}',
+        "req_by_pod": f'sum by (pod) (kube_pod_container_resource_requests{{{f}, resource{op}"{resource}"}}){divisor}',
     }
 
 
@@ -246,13 +250,14 @@ def build():
     # All 5 dimensions with their expressions
     dimensions = []
 
-    # 1. GPU Count
+    # 1. GPU Count — uses nvidia.com/gpu resource from kube-state-metrics
     gpu = dim_exprs("nvidia.com/gpu", "")
     gpu["label"] = "GPU"
     gpu["sku_var"] = "$sku_gpu_count"
     gpu["axis"] = "GPU Count"
-    gpu["usage_pod"] = f'sum by (pod, namespace, node) (DCGM_FI_DEV_GPU_UTIL{{{NSND}}}) / 100'
-    gpu["usage_total"] = f'sum(DCGM_FI_DEV_GPU_UTIL{{{NSND}}}) / 100'
+    gpu["gunit"] = "short"
+    gpu["usage_pod"] = f'sum by (pod, namespace, node) (kube_pod_container_resource_requests{{{NSND}, resource="nvidia.com/gpu"}})'
+    gpu["usage_total"] = f'sum(kube_pod_container_resource_requests{{{NSND}, resource="nvidia.com/gpu"}})'
     gpu["req_color"] = "#B877D9"
     gpu["lim_color"] = "#FF9830"
     dimensions.append(gpu)
@@ -262,6 +267,7 @@ def build():
     cpu["label"] = "vCPU"
     cpu["sku_var"] = "$sku_cpu_cores"
     cpu["axis"] = "vCPU Cores"
+    cpu["gunit"] = "short"
     cpu["usage_pod"] = f'sum by (pod, namespace, node) (rate(container_cpu_usage_seconds_total{{{NSND}}}[5m]))'
     cpu["usage_total"] = f'sum(rate(container_cpu_usage_seconds_total{{{NSND}}}[5m]))'
     cpu["req_color"] = "#5794F2"
@@ -273,34 +279,19 @@ def build():
     mem["label"] = "Memory"
     mem["sku_var"] = "$sku_memory_value"
     mem["axis"] = "Memory (selected unit)"
+    mem["gunit"] = "short"
     mem["usage_pod"] = f'sum by (pod, namespace, node) (container_memory_working_set_bytes{{{NSND}}}) / $memory_unit'
     mem["usage_total"] = f'sum(container_memory_working_set_bytes{{{NSND}}}) / $memory_unit'
     mem["req_color"] = "#8F3BB8"
     mem["lim_color"] = "#F2CC0C"
     dimensions.append(mem)
 
-    # 4. VRAM (GPU Memory)
-    vram = dim_exprs("nvidia.com/gpu", "")  # requests are GPU count, not VRAM
-    vram["label"] = "VRAM (GPU Memory)"
-    vram["sku_var"] = "$sku_vram_gib"
-    vram["axis"] = "VRAM (GiB)"
-    # Override with DCGM metrics for VRAM
-    vram["req_pod"] = f'sum by (pod, namespace, node) (DCGM_FI_DEV_FB_USED{{{NSND}}}) / 1024'
-    vram["lim_pod"] = f'sum by (pod, namespace, node) (DCGM_FI_DEV_FB_USED{{{NSND}}} + DCGM_FI_DEV_FB_FREE{{{NSND}}}) / 1024'
-    vram["req_total"] = f'sum(DCGM_FI_DEV_FB_USED{{{NSND}}}) / 1024'
-    vram["lim_total"] = f'sum(DCGM_FI_DEV_FB_USED{{{NSND}}} + DCGM_FI_DEV_FB_FREE{{{NSND}}}) / 1024'
-    vram["req_by_node"] = f'sum by (node) (DCGM_FI_DEV_FB_USED{{{NS}}}) / 1024'
-    vram["usage_pod"] = vram["req_pod"]
-    vram["usage_total"] = vram["req_total"]
-    vram["req_color"] = "#F2CC0C"
-    vram["lim_color"] = "#FF9830"
-    dimensions.append(vram)
-
-    # 5. Local Storage (Ephemeral)
-    eph = dim_exprs("ephemeral-storage", " / $storage_unit")
+    # 4. Local Storage (Ephemeral) — regex matches both ephemeral-storage and ephemeral_storage
+    eph = dim_exprs("ephemeral.storage", " / $storage_unit", use_regex=True)
     eph["label"] = "Local Storage (Ephemeral)"
     eph["sku_var"] = "$sku_storage_value"
     eph["axis"] = "Storage (selected unit)"
+    eph["gunit"] = "short"
     eph["usage_pod"] = f'sum by (pod, namespace, node) (container_fs_usage_bytes{{{NSND}}}) / $storage_unit'
     eph["usage_total"] = f'sum(container_fs_usage_bytes{{{NSND}}}) / $storage_unit'
     eph["req_color"] = "#56A64B"
@@ -314,18 +305,16 @@ def build():
 
     for i, d in enumerate(dimensions):
         # Calculate violation expression
-        if d["label"] == "VRAM (GPU Memory)":
-            viol = f'clamp_max(ceil({d["req_total"]} / {d["sku_var"]}), 1)'
-        elif d["label"] == "Memory":
+        if d["label"] == "Memory":
             viol = f'clamp_max(ceil(sum(kube_pod_container_resource_requests{{{NSND}, resource="memory"}}) / ($sku_memory_value * $memory_unit)), 1)'
         elif d["label"] == "Local Storage (Ephemeral)":
-            viol = f'clamp_max(ceil(sum(kube_pod_container_resource_requests{{{NSND}, resource="ephemeral-storage"}}) / ($sku_storage_value * $storage_unit)), 1)'
+            viol = f'clamp_max(ceil(sum(kube_pod_container_resource_requests{{{NSND}, resource=~"ephemeral.storage"}}) / ($sku_storage_value * $storage_unit)), 1)'
         else:
             res_name = "nvidia.com/gpu" if d["label"] == "GPU" else "cpu"
             viol = f'clamp_max(ceil(sum(kube_pod_container_resource_requests{{{NSND}, resource="{res_name}"}}) / {d["sku_var"]}), 1)'
-        
-        w = 5 if i < 4 else 4
-        x = i * 5 if i < 4 else 20
+
+        w = 6
+        x = i * 6
         panels.append(stat_p(
             f"{d['label']} - SKU Status",
             f"Whether total {d['label']} requests exceed the configured SKU capacity. "
@@ -349,6 +338,8 @@ def build():
             tgt(f'vector($sku_cpu_cores)', "vCPU SKU Cap", instant=True),
             tgt(f'sum(kube_pod_container_resource_requests{{{NSND}, resource="memory"}}) / $memory_unit', "Mem Reserved", instant=True),
             tgt(f'vector($sku_memory_value)', "Mem SKU Cap", instant=True),
+            tgt(f'sum(kube_pod_container_resource_requests{{{NSND}, resource=~"ephemeral.storage"}}) / $storage_unit', "Storage Reserved", instant=True),
+            tgt(f'vector($sku_storage_value)', "Storage SKU Cap", instant=True),
         ],
         decimals=1, color_mode="value", text_mode="value_and_name", orient="horizontal",
         thresholds={"mode": "absolute", "steps": [{"color": "#73BF69", "value": None}]}
@@ -367,17 +358,14 @@ def build():
             use_pct = f'sum(container_memory_working_set_bytes{{{NSND}}}) / {sku_full}'
         elif d["label"] == "Local Storage (Ephemeral)":
             sku_full = f'($sku_storage_value * $storage_unit)'
-            req_pct = f'sum(kube_pod_container_resource_requests{{{NSND}, resource="ephemeral-storage"}}) / {sku_full}'
+            req_pct = f'sum(kube_pod_container_resource_requests{{{NSND}, resource=~"ephemeral.storage"}}) / {sku_full}'
             use_pct = f'sum(container_fs_usage_bytes{{{NSND}}}) / {sku_full}'
-        elif d["label"] == "VRAM (GPU Memory)":
-            req_pct = f'{d["req_total"]} / {d["sku_var"]}'
-            use_pct = req_pct
         else:
             req_pct = f'{d["req_total"]} / {d["sku_var"]}'
             use_pct = f'{d["usage_total"]} / {d["sku_var"]}'
 
-        w = 5 if i < 4 else 4
-        x = i * 5 if i < 4 else 20
+        w = 6
+        x = i * 6
         panels.append({
             "id": nid(), "title": f"{d['label']} - Reserved vs Used",
             "description": f"Reserved = % of SKU claimed by pod requests. Used = actual utilization.",
@@ -453,8 +441,8 @@ def build():
             tgt(f'sum by (pod, namespace, node) (kube_pod_container_resource_limits{{{NSND}, resource="cpu"}})', "", fmt="table"),
             tgt(f'sum by (pod, namespace, node) (kube_pod_container_resource_requests{{{NSND}, resource="memory"}}) / $memory_unit', "", fmt="table"),
             tgt(f'sum by (pod, namespace, node) (kube_pod_container_resource_limits{{{NSND}, resource="memory"}}) / $memory_unit', "", fmt="table"),
-            tgt(f'sum by (pod, namespace, node) (kube_pod_container_resource_requests{{{NSND}, resource="ephemeral-storage"}}) / $storage_unit', "", fmt="table"),
-            tgt(f'sum by (pod, namespace, node) (kube_pod_container_resource_limits{{{NSND}, resource="ephemeral-storage"}}) / $storage_unit', "", fmt="table"),
+            tgt(f'sum by (pod, namespace, node) (kube_pod_container_resource_requests{{{NSND}, resource=~"ephemeral.storage"}}) / $storage_unit', "", fmt="table"),
+            tgt(f'sum by (pod, namespace, node) (kube_pod_container_resource_limits{{{NSND}, resource=~"ephemeral.storage"}}) / $storage_unit', "", fmt="table"),
         ])
     })
     y += 8
@@ -478,7 +466,7 @@ def build():
         if d["label"] == "Memory":
             gauge_expr = f'sum(kube_pod_container_resource_requests{{{NSND}, resource="memory"}}) / ($sku_memory_value * $memory_unit)'
         elif d["label"] == "Local Storage (Ephemeral)":
-            gauge_expr = f'sum(kube_pod_container_resource_requests{{{NSND}, resource="ephemeral-storage"}}) / ($sku_storage_value * $storage_unit)'
+            gauge_expr = f'sum(kube_pod_container_resource_requests{{{NSND}, resource=~"ephemeral.storage"}}) / ($sku_storage_value * $storage_unit)'
         else:
             gauge_expr = f'{d["req_total"]} / {d["sku_var"]}'
         panels.append(gauge_p(
@@ -513,12 +501,12 @@ def build():
             req_color=d["req_color"], lim_color=d["lim_color"]
         ))
 
-        # 5. Node stacked reservation
-        panels.append(node_stacked(
-            f"{d['label']} - Reservation by Node (Stacked)",
-            f"How {d['label']} reservations distribute across nodes. Each color = a node.",
+        # 5. Pod stacked reservation — each pod stacked to show total
+        panels.append(pod_stacked(
+            f"{d['label']} - Reservation by Pod (Stacked)",
+            f"Each pod's {d['label']} request stacked to show the total reservation. Height = total across all pods.",
             {"h": 8, "w": 12, "x": 12, "y": y + 4},
-            d["req_by_node"], d["axis"]
+            d["req_by_pod"], d["axis"], unit=d.get("gunit", "short")
         ))
         y += 12
 
@@ -601,11 +589,6 @@ def build():
         unit_dd("memory_unit", "Memory Unit",
                 "Unit for memory. SKU memory value must be in this unit.",
                 "GiB (2^30 bytes)", "1073741824"),
-        {"name": "sku_vram_gib", "type": "textbox", "label": "SKU: VRAM (GiB)",
-         "current": {"text": "640", "value": "640"}, "hide": 0,
-         "options": [{"selected": True, "text": "640", "value": "640"}],
-         "query": "640", "skipUrlSync": False,
-         "description": "Total GPU VRAM in GiB (640 GiB = 8x A100 80GB)"},
         {"name": "sku_storage_value", "type": "textbox",
          "label": "SKU: Local Storage (in unit below)",
          "current": {"text": "10", "value": "10"}, "hide": 0,
@@ -621,13 +604,13 @@ def build():
         "__inputs": [], "__requires": [
             {"type": "grafana", "id": "grafana", "name": "Grafana", "version": "9.0.0"},
             {"type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0"}],
-        "id": None, "uid": "k8s-sku-violation-v4",
+        "id": None, "uid": "k8s-sku-violation-v5",
         "title": "K8s Pod Resources vs SKU Capacity",
-        "description": "Monitors K8s pod GPU, vCPU, Memory, VRAM, and Local Storage against configurable SKU capacity.",
+        "description": "Monitors K8s pod GPU, vCPU, Memory, and Local Storage against configurable SKU capacity.",
         "tags": ["kubernetes", "sku", "capacity", "gpu", "resources"],
         "style": "dark", "timezone": "browser", "editable": True,
         "graphTooltip": 1, "fiscalYearStartMonth": 0, "liveNow": False,
-        "refresh": "30s", "schemaVersion": 38, "version": 4,
+        "refresh": "30s", "schemaVersion": 38, "version": 5,
         "time": {"from": "now-1h", "to": "now"}, "timepicker": {},
         "annotations": {"list": [{"builtIn": 1, "datasource": {"type": "grafana", "uid": "-- Grafana --"},
             "enable": True, "hide": True, "iconColor": "rgba(0, 211, 255, 1)",
