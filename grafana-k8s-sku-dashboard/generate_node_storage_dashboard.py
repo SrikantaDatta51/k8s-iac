@@ -69,7 +69,7 @@ def ts_panel(title, desc, gp, targets, axis_label, unit="bytes", overrides=None)
         "id": nid(), "title": title, "description": desc, "type": "timeseries",
         "datasource": ds(), "gridPos": gp,
         "fieldConfig": {"defaults": {"unit": unit,
-            "custom": {"lineWidth": 2, "fillOpacity": 15, "gradientMode": "scheme",
+            "custom": {"lineWidth": 2, "fillOpacity": 15, "gradientMode": "none",
                 "axisLabel": axis_label, "drawStyle": "line", "pointSize": 5,
                 "showPoints": "auto", "spanNulls": True}},
             "overrides": overrides or []},
@@ -83,7 +83,7 @@ def stacked_ts(title, desc, gp, targets, axis_label, unit="bytes"):
         "id": nid(), "title": title, "description": desc, "type": "timeseries",
         "datasource": ds(), "gridPos": gp,
         "fieldConfig": {"defaults": {"unit": unit,
-            "custom": {"lineWidth": 0, "fillOpacity": 80, "gradientMode": "scheme",
+            "custom": {"lineWidth": 0, "fillOpacity": 80, "gradientMode": "none",
                 "axisLabel": axis_label, "drawStyle": "bars", "pointSize": 5,
                 "stacking": {"mode": "normal"}, "showPoints": "never"}},
             "overrides": []},
@@ -122,9 +122,9 @@ def build():
         "Running Pod Count Over Time",
         "Number of pods in Running phase over time for selected scope.",
         {"h": 8, "w": 12, "x": 0, "y": y},
-        [tgt(f'count(kube_pod_status_phase{{{NSND}, phase="Running"}} == 1)', "Running Pods"),
-         tgt(f'count(kube_pod_status_phase{{{NSND}, phase="Pending"}} == 1)', "Pending Pods"),
-         tgt(f'count(kube_pod_status_phase{{{NSND}, phase="Failed"}} == 1)', "Failed Pods")],
+        [tgt(f'count(kube_pod_status_phase{{{NS}, phase="Running"}} == 1 * on(pod, namespace) group_left() (kube_pod_info{{{NSND}}} * 0 + 1))', "Running Pods"),
+         tgt(f'count(kube_pod_status_phase{{{NS}, phase="Pending"}} == 1 * on(pod, namespace) group_left() (kube_pod_info{{{NSND}}} * 0 + 1))', "Pending Pods"),
+         tgt(f'count(kube_pod_status_phase{{{NS}, phase="Failed"}} == 1 * on(pod, namespace) group_left() (kube_pod_info{{{NSND}}} * 0 + 1))', "Failed Pods")],
         axis_label="Pod Count", unit="short"
     ))
 
@@ -148,7 +148,7 @@ def build():
         [
             tgt(f'kube_pod_start_time{{{NSND}}}', "", fmt="table"),
             tgt(f'time() - kube_pod_start_time{{{NSND}}}', "", fmt="table"),
-            tgt(f'kube_pod_status_phase{{{NSND}}} == 1', "", fmt="table"),
+            tgt(f'kube_pod_status_phase{{{NS}}} == 1 * on(pod, namespace) group_left(node) kube_pod_info{{{NSND}}}', "", fmt="table"),
         ],
         transformations=[
             {"id": "merge", "options": {}},
@@ -184,9 +184,9 @@ def build():
         "Recently Terminated Pods (Phase Changes)",
         "Tracks pods entering Succeeded or Failed phase. Useful for identifying workload completions and failures.",
         {"h": 8, "w": 24, "x": 0, "y": y},
-        [tgt(f'count(kube_pod_status_phase{{{NSND}, phase="Succeeded"}} == 1) or vector(0)', "Succeeded Pods"),
-         tgt(f'count(kube_pod_status_phase{{{NSND}, phase="Failed"}} == 1) or vector(0)', "Failed Pods"),
-         tgt(f'count(kube_pod_status_phase{{{NSND}, phase="Unknown"}} == 1) or vector(0)', "Unknown Phase")],
+        [tgt(f'count(kube_pod_status_phase{{{NS}, phase="Succeeded"}} == 1 * on(pod, namespace) group_left() (kube_pod_info{{{NSND}}} * 0 + 1)) or vector(0)', "Succeeded Pods"),
+         tgt(f'count(kube_pod_status_phase{{{NS}, phase="Failed"}} == 1 * on(pod, namespace) group_left() (kube_pod_info{{{NSND}}} * 0 + 1)) or vector(0)', "Failed Pods"),
+         tgt(f'count(kube_pod_status_phase{{{NS}, phase="Unknown"}} == 1 * on(pod, namespace) group_left() (kube_pod_info{{{NSND}}} * 0 + 1)) or vector(0)', "Unknown Phase")],
         axis_label="Pod Count", unit="short"
     ))
     y += 8
