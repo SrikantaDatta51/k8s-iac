@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Generate K8s Pod Details & Scheduler Metrics Dashboard - v2.
-Focused on: rich pod info, phases, errors, kill/fail reasons,
-deletion timestamps, scheduling delay from kube-state-metrics.
-Removed: API server, etcd (not needed).
-Scheduler: uses kube_pod_created vs kube_pod_start_time for scheduling delay.
+"""Generate K8s Pod Details & Scheduling Dashboard - v3.
+Focused: rich pod lifecycle (start, completion, deletion, exit reason),
+phase analysis, error/kill tracking, pending time analysis.
+Uses ONLY kube-state-metrics (works in all K8s clusters).
 """
 import json, sys
 
@@ -110,7 +109,6 @@ def build():
             color_mode="value", text_mode="value",
             thresholds={"mode": "absolute", "steps": [{"color": colors[ph], "value": None}]}
         ))
-    # Extra stat: total pods
     panels.append(stat(
         "Total Pods", "Total pod count across all phases",
         {"h": 3, "w": 4, "x": 20, "y": y},
@@ -120,11 +118,10 @@ def build():
     ))
     y += 3
 
-    # Pods by phase over time — stacked
+    # Pods by phase over time
     panels.append(stacked(
         "Pods by Phase Over Time",
-        "Single query split by phase label. Each color = a phase. "
-        "Height = total pod count.",
+        "Single query split by phase label. Each color = a phase.",
         {"h": 8, "w": 24, "x": 0, "y": y},
         [tgt(f'sum by (phase) (kube_pod_status_phase{{{NS}}} == 1)', "{{phase}}")],
         axis="Pod Count"
@@ -132,22 +129,26 @@ def build():
     y += 8
 
     # ================================================================
-    # ROW 2: RICH POD TABLE with START + DELETION timestamps
+    # ROW 2: FULL POD LIFECYCLE TABLE
+    # Started At, Completed At, Deleted At, Exit Reason, Uptime, Restarts
     # ================================================================
-    panels.append(row("All Pods — Start Time, Deletion Time, Uptime, Restarts", y)); y += 1
+    panels.append(row("Full Pod Lifecycle — Start, End, Exit Reason", y)); y += 1
 
-    # kube_pod_start_time * 1000 for ISO, kube_pod_deletion_timestamp * 1000 for deletion
-    # time() - kube_pod_start_time for uptime, restarts total
     panels.append(tbl(
         "All Pods — Full Lifecycle Table",
-        "Every pod with: Start Time (ISO), Deletion Time (if being deleted/terminated), "
-        "Uptime (duration since start), Total Restarts. "
-        "Deletion Time appears when a pod is being terminated or has been deleted. "
-        "If Deletion Time is empty, the pod is still active.",
-        {"h": 14, "w": 24, "x": 0, "y": y},
+        "Every pod with complete lifecycle timestamps:\n"
+        "• Started At = kube_pod_start_time (when first container started)\n"
+        "• Completed At = kube_pod_completion_time (when pod finished, for Jobs/completed pods)\n"
+        "• Deleted At = kube_pod_deletion_timestamp (when pod deletion was requested)\n"
+        "• Exit Reason = kube_pod_container_status_last_terminated_reason (OOMKilled, Error, Completed, etc.)\n"
+        "• Uptime = how long since pod started\n"
+        "• Total Restarts = cumulative container restart count\n\n"
+        "If Completed/Deleted columns are empty, the pod is still active.",
+        {"h": 16, "w": 24, "x": 0, "y": y},
         [
             tgt(f'kube_pod_start_time{{{NS}}} * 1000', "", fmt="table"),
             tgt(f'time() - kube_pod_start_time{{{NS}}}', "", fmt="table"),
+            tgt(f'kube_pod_completion_time{{{NS}}} * 1000', "", fmt="table"),
             tgt(f'kube_pod_deletion_timestamp{{{NS}}} * 1000', "", fmt="table"),
             tgt(f'sum by (pod, namespace) (kube_pod_container_status_restarts_total{{{NS}}})', "", fmt="table"),
         ],
@@ -160,24 +161,37 @@ def build():
                     "node": True},
                 "renameByName": {
                     "pod": "Pod", "namespace": "Namespace",
-                    "Value #A": "Started At", "Value #B": "Uptime",
-                    "Value #C": "Deleted At", "Value #D": "Total Restarts"
+                    "Value #A": "Started At",
+                    "Value #B": "Uptime",
+                    "Value #C": "Completed At",
+                    "Value #D": "Deleted At",
+                    "Value #E": "Total Restarts"
                 }}}
         ],
         overrides=[
-            {"matcher": {"id": "byName", "options": "Pod"}, "properties": [{"id": "custom.width", "value": 320}]},
-            {"matcher": {"id": "byName", "options": "Namespace"}, "properties": [{"id": "custom.width", "value": 150}]},
+            {"matcher": {"id": "byName", "options": "Pod"}, "properties": [{"id": "custom.width", "value": 280}]},
+            {"matcher": {"id": "byName", "options": "Namespace"}, "properties": [{"id": "custom.width", "value": 130}]},
             {"matcher": {"id": "byName", "options": "Started At"},
-             "properties": [{"id": "unit", "value": "dateTimeAsIso"}]},
+             "properties": [{"id": "unit", "value": "dateTimeAsIso"},
+                {"id": "custom.width", "value": 170}]},
+            {"matcher": {"id": "byName", "options": "Completed At"},
+             "properties": [{"id": "unit", "value": "dateTimeAsIso"},
+                {"id": "custom.width", "value": 170},
+                {"id": "custom.displayMode", "value": "color-text"},
+                {"id": "thresholds", "value": {"mode": "absolute", "steps": [
+                    {"color": "#5794F2", "value": None}]}}]},
             {"matcher": {"id": "byName", "options": "Deleted At"},
              "properties": [{"id": "unit", "value": "dateTimeAsIso"},
+                {"id": "custom.width", "value": 170},
                 {"id": "custom.displayMode", "value": "color-text"},
                 {"id": "thresholds", "value": {"mode": "absolute", "steps": [
                     {"color": "#FF4040", "value": None}]}}]},
             {"matcher": {"id": "byName", "options": "Uptime"},
-             "properties": [{"id": "unit", "value": "dtdurations"}]},
+             "properties": [{"id": "unit", "value": "dtdurations"},
+                {"id": "custom.width", "value": 120}]},
             {"matcher": {"id": "byName", "options": "Total Restarts"},
              "properties": [{"id": "decimals", "value": 0},
+                {"id": "custom.width", "value": 130},
                 {"id": "thresholds", "value": {"mode": "absolute", "steps": [
                     {"color": "#73BF69", "value": None},
                     {"color": "#FF9830", "value": 3},
@@ -186,46 +200,81 @@ def build():
         ],
         sort=[{"displayName": "Started At", "desc": True}]
     ))
-    y += 14
+    y += 16
+
+    # Exit reason table — separate, more detailed
+    panels.append(tbl(
+        "Container Exit Reasons — Last Termination per Container",
+        "For every container, the reason it was last terminated:\n"
+        "• OOMKilled = container exceeded memory limit, killed by K8s\n"
+        "• Error = container exited with non-zero exit code (application crash)\n"
+        "• Completed = container finished normally (exit code 0)\n"
+        "• ContainerCannotRun = container runtime error\n"
+        "• DeadlineExceeded = Job exceeded activeDeadlineSeconds\n"
+        "• Evicted = pod evicted by kubelet (disk/memory pressure)\n\n"
+        "This shows the most recent termination — useful for diagnosing crash loops.",
+        {"h": 10, "w": 24, "x": 0, "y": y},
+        [tgt(f'kube_pod_container_status_last_terminated_reason{{{NS}}} == 1', "", fmt="table")],
+        transforms=[
+            {"id": "organize", "options": {
+                "excludeByName": {"Time": True, "__name__": True, "uid": True,
+                    "job": True, "instance": True, "service": True,
+                    "endpoint": True, "prometheus": True, "Value": True,
+                    "node": True},
+                "renameByName": {
+                    "pod": "Pod", "namespace": "Namespace", "container": "Container",
+                    "reason": "Exit / Kill Reason"
+                }}}
+        ],
+        overrides=[
+            {"matcher": {"id": "byName", "options": "Pod"}, "properties": [{"id": "custom.width", "value": 280}]},
+            {"matcher": {"id": "byName", "options": "Container"}, "properties": [{"id": "custom.width", "value": 180}]},
+            {"matcher": {"id": "byName", "options": "Namespace"}, "properties": [{"id": "custom.width", "value": 130}]},
+            {"matcher": {"id": "byName", "options": "Exit / Kill Reason"},
+             "properties": [
+                {"id": "custom.displayMode", "value": "color-text"},
+                {"id": "custom.width", "value": 200},
+                {"id": "thresholds", "value": {"mode": "absolute", "steps": [
+                    {"color": "#FF4040", "value": None}]}}]},
+        ],
+        sort=[{"displayName": "Exit / Kill Reason", "desc": False}]
+    ))
+    y += 10
 
     # ================================================================
-    # ROW 3: POD ERRORS — WHY PODS FAIL/GET KILLED
+    # ROW 3: POD ERRORS — WAITING/TERMINATED/EVICTED
     # ================================================================
-    panels.append(row("Pod Errors — Why Pods Fail, Get Killed, or Get Stuck", y)); y += 1
+    panels.append(row("Pod Errors — Waiting, Killed, Evicted", y)); y += 1
 
-    # Containers WAITING — CrashLoopBackOff, ImagePullBackOff, etc.
     panels.append(ts(
         "Containers Stuck in Waiting State (by Reason)",
-        "Containers that are NOT running — stuck waiting. "
-        "CrashLoopBackOff = container keeps crashing and K8s is backing off restarts. "
-        "ImagePullBackOff = cannot pull container image. "
-        "CreateContainerConfigError = bad config (missing secret/configmap). "
-        "ErrImagePull = image doesn't exist or no auth.",
+        "Containers NOT running — stuck waiting.\n"
+        "• CrashLoopBackOff = keeps crashing, K8s backing off restarts\n"
+        "• ImagePullBackOff / ErrImagePull = cannot pull image\n"
+        "• CreateContainerConfigError = missing secret/configmap\n"
+        "• ContainerCreating = still starting up (normal if brief)",
         {"h": 8, "w": 12, "x": 0, "y": y},
         [tgt(f'sum by (reason) (kube_pod_container_status_waiting_reason{{{NS}}} == 1)', "{{reason}}")],
         axis="Containers Waiting"
     ))
 
-    # Containers TERMINATED — OOMKilled, Error, etc.
     panels.append(ts(
         "Containers Killed or Terminated (by Reason)",
-        "Containers that were forcefully stopped. "
-        "OOMKilled = ran out of memory, K8s killed it. "
-        "Error = container exited with non-zero code (application crash). "
-        "Completed = finished normally (for Jobs). "
-        "ContainerCannotRun = runtime error starting container. "
-        "DeadlineExceeded = Job exceeded activeDeadlineSeconds.",
+        "Containers that were forcefully stopped.\n"
+        "• OOMKilled = ran out of memory\n"
+        "• Error = exited non-zero (app crash)\n"
+        "• Completed = finished normally\n"
+        "• ContainerCannotRun = runtime error",
         {"h": 8, "w": 12, "x": 12, "y": y},
         [tgt(f'sum by (reason) (kube_pod_container_status_terminated_reason{{{NS}}} == 1)', "{{reason}}")],
         axis="Containers Terminated"
     ))
     y += 8
 
-    # Tables: which SPECIFIC pods are waiting / last terminated
+    # Which pods are stuck right now
     panels.append(tbl(
-        "Which Pods Are Stuck Right Now — Waiting Reasons",
-        "List of pods with containers currently in Waiting state. "
-        "These pods are NOT running. The Reason column tells you exactly why.",
+        "Which Pods Are Stuck Right Now",
+        "Pods with containers in Waiting state. These are NOT running.",
         {"h": 8, "w": 12, "x": 0, "y": y},
         [tgt(f'kube_pod_container_status_waiting_reason{{{NS}}} == 1', "", fmt="table")],
         transforms=[
@@ -235,88 +284,45 @@ def build():
                     "endpoint": True, "prometheus": True, "Value": True},
                 "renameByName": {
                     "pod": "Pod", "namespace": "Namespace", "container": "Container",
-                    "reason": "Why It Is Stuck"
+                    "reason": "Why Stuck"
                 }}}
         ],
         overrides=[
             {"matcher": {"id": "byName", "options": "Pod"}, "properties": [{"id": "custom.width", "value": 260}]},
-            {"matcher": {"id": "byName", "options": "Why It Is Stuck"},
+            {"matcher": {"id": "byName", "options": "Why Stuck"},
              "properties": [{"id": "custom.displayMode", "value": "color-text"},
                 {"id": "thresholds", "value": {"mode": "absolute", "steps": [
                     {"color": "#FF4040", "value": None}]}}]},
         ]
     ))
 
-    panels.append(tbl(
-        "Last Kill/Termination Reason per Container",
-        "For each container, why it was LAST killed or terminated. "
-        "OOMKilled = not enough memory limit. Error = app crashed. "
-        "This persists even after restart so you can see the cause.",
-        {"h": 8, "w": 12, "x": 12, "y": y},
-        [tgt(f'kube_pod_container_status_last_terminated_reason{{{NS}}} == 1', "", fmt="table")],
-        transforms=[
-            {"id": "organize", "options": {
-                "excludeByName": {"Time": True, "__name__": True, "uid": True,
-                    "job": True, "instance": True, "service": True,
-                    "endpoint": True, "prometheus": True, "Value": True},
-                "renameByName": {
-                    "pod": "Pod", "namespace": "Namespace", "container": "Container",
-                    "reason": "Kill Reason"
-                }}}
-        ],
-        overrides=[
-            {"matcher": {"id": "byName", "options": "Pod"}, "properties": [{"id": "custom.width", "value": 260}]},
-            {"matcher": {"id": "byName", "options": "Kill Reason"},
-             "properties": [{"id": "custom.displayMode", "value": "color-text"},
-                {"id": "thresholds", "value": {"mode": "absolute", "steps": [
-                    {"color": "#FF4040", "value": None}]}}]},
-        ]
-    ))
-    y += 8
-
-    # Pod Status Reasons (Evicted, NodeLost)
+    # Pod status reasons (Evicted, NodeLost)
     panels.append(ts(
-        "Pod-Level Status Reasons Over Time",
-        "Pods with a special status reason: "
-        "Evicted = pod was evicted by kubelet (disk pressure, memory pressure, PID pressure). "
-        "NodeLost = node became unreachable. "
-        "UnexpectedAdmissionError = admission webhook error.",
-        {"h": 8, "w": 12, "x": 0, "y": y},
+        "Pod Status Reasons (Evicted, NodeLost, etc.)",
+        "• Evicted = kubelet evicted the pod (disk/memory/PID pressure)\n"
+        "• NodeLost = node became unreachable\n"
+        "• UnexpectedAdmissionError = admission webhook error",
+        {"h": 8, "w": 12, "x": 12, "y": y},
         [tgt(f'sum by (reason) (kube_pod_status_reason{{{NS}}} == 1)', "{{reason}}")],
         axis="Pods"
     ))
+    y += 8
 
     # Readiness
     panels.append(ts(
-        "Pod Readiness Over Time",
-        "Ready = pod passes readiness probe, receiving traffic. "
-        "Not Ready = pod exists but is NOT receiving traffic (failing readiness probe). "
-        "High 'Not Ready' count = service degradation.",
-        {"h": 8, "w": 12, "x": 12, "y": y},
+        "Pod Readiness — Ready vs Not Ready",
+        "Ready = passing readiness probe, receiving traffic. "
+        "Not Ready = exists but NOT receiving traffic.",
+        {"h": 8, "w": 12, "x": 0, "y": y},
         [tgt(f'count(kube_pod_status_ready{{{NS}, condition="true"}} == 1) or vector(0)', "Ready"),
          tgt(f'count(kube_pod_status_ready{{{NS}, condition="false"}} == 1) or vector(0)', "Not Ready")],
         axis="Pods"
     ))
-    y += 8
 
-    # ================================================================
-    # ROW 4: RESTART ANALYSIS
-    # ================================================================
-    panels.append(row("Restart Analysis — Crash Loops & OOMKills", y)); y += 1
-
+    # Restart rate
     panels.append(ts(
-        "Total Restarts per Pod (cumulative)",
-        "Cumulative restart count over time. A steep rising line = active crash loop. "
-        "Flat line = stable pod. Each line = one pod.",
-        {"h": 8, "w": 12, "x": 0, "y": y},
-        [tgt(f'sum by (pod) (kube_pod_container_status_restarts_total{{{NS}}})', "{{pod}}")],
-        axis="Restart Count"
-    ))
-
-    panels.append(ts(
-        "Restart Rate per Pod (restarts/sec)",
-        "Rate of restarts. Any sustained rate > 0 means the pod is actively cycling. "
-        "Spikes indicate sudden failures (OOMKill, crash).",
+        "Container Restart Rate (restarts/sec)",
+        "Rate of restarts per pod. Any sustained rate > 0 = pod is crash-looping.",
         {"h": 8, "w": 12, "x": 12, "y": y},
         [tgt(f'sum by (pod) (rate(kube_pod_container_status_restarts_total{{{NS}}}[5m]))', "{{pod}}")],
         axis="Restarts/sec"
@@ -324,37 +330,64 @@ def build():
     y += 8
 
     # ================================================================
-    # ROW 5: SCHEDULING — using kube-state-metrics (works everywhere)
+    # ROW 4: PENDING POD ANALYSIS
     # ================================================================
-    panels.append(row("Pod Scheduling — Time to Schedule (from kube-state-metrics)", y)); y += 1
+    panels.append(row("Pending Pod Analysis — How Long Pods Wait Before Running", y)); y += 1
 
-    # Key insight: scheduling delay = kube_pod_start_time - kube_pod_created
-    # This measures: API creation → first container running
-    # (includes: queue wait + scheduling + image pull + init containers)
+    # Currently pending pods — how long they've been pending
+    # For pending pods, start_time doesn't exist yet, but created does.
+    # We try multiple approaches:
+    # 1. kube_pod_created if available → time() - kube_pod_created for pending pods
+    # 2. Track phase changes over time
+
+    # Approach: show pending pods count over time + table of those pending
     panels.append(ts(
-        "Time from Pod Creation to Running (scheduling + startup delay)",
-        "kube_pod_start_time - kube_pod_created = total time from when the pod object was "
-        "created in the API until the first container started running. "
-        "This includes: scheduler queue wait + scheduling decision + image pull + init containers. "
-        "High values = scheduling delays, slow image pulls, or resource pressure.",
-        {"h": 10, "w": 24, "x": 0, "y": y},
-        [tgt(f'(kube_pod_start_time{{{NS}}} - kube_pod_created{{{NS}}}) > 0', "{{pod}}")],
-        axis="Seconds to Start", unit="s"
+        "Pending Pods Over Time",
+        "How many pods are in Pending state at any point. A rising trend = "
+        "cluster cannot schedule pods fast enough (resource pressure, "
+        "taints, node selectors, PVC issues).",
+        {"h": 8, "w": 12, "x": 0, "y": y},
+        [tgt(f'count(kube_pod_status_phase{{{NS}, phase="Pending"}} == 1) or vector(0)', "Pending Pods"),
+         tgt(f'count(kube_pod_status_phase{{{NS}, phase="Running"}} == 1) or vector(0)', "Running Pods")],
+        axis="Pods"
     ))
-    y += 10
 
-    # Scheduling delay table — which pods took longest to schedule
+    # Pods stuck in Pending — show which ones
+    panels.append(ts(
+        "Individual Pods in Pending State",
+        "Each line = a pod currently in Pending. If a line persists for minutes, "
+        "the pod cannot be scheduled. Check events for the reason.",
+        {"h": 8, "w": 12, "x": 12, "y": y},
+        [tgt(f'kube_pod_status_phase{{{NS}, phase="Pending"}} == 1', "{{pod}}")],
+        axis="Pending (1=yes)"
+    ))
+    y += 8
+
+    # Pending pods table with time in pending
+    # kube_pod_created gives creation timestamp. For pending pods that haven't started:
+    # pending_duration = time() - kube_pod_created (if the metric exists)
+    # We provide TWO queries — one using kube_pod_created, one using kube_pod_start_time
+    # The created one shows pending time, the start one shows total lifetime
     panels.append(tbl(
-        "Pods by Scheduling Delay (longest first)",
-        "How long each pod took from creation to first container start. "
-        "Created At = when API received the pod spec. Started At = when first container ran. "
-        "Delay = the gap (scheduling + image pull + init). "
-        "Sort by Delay to find pods that took unusually long.",
+        "Currently Pending Pods — How Long They Have Been Waiting",
+        "Pods currently in Pending phase. Shows:\n"
+        "• Created At = when the pod spec was submitted to the API (kube_pod_created * 1000)\n"
+        "• Pending Duration = time() - kube_pod_created (how long it's been waiting)\n\n"
+        "If Created At shows empty or 1970, the kube_pod_created metric may not be "
+        "available in your kube-state-metrics version. In that case, use "
+        "'kubectl get pod -o wide' to check creation times.\n\n"
+        "Common reasons for being stuck in Pending:\n"
+        "- Insufficient CPU/Memory/GPU on any node\n"
+        "- Node taints with no matching tolerations\n"
+        "- Node selector / affinity rules no node matches\n"
+        "- PVC not bound (storage not available)\n"
+        "- Too many pods on node (PodLimit)",
         {"h": 10, "w": 24, "x": 0, "y": y},
         [
-            tgt(f'kube_pod_created{{{NS}}} * 1000', "", fmt="table"),
-            tgt(f'kube_pod_start_time{{{NS}}} * 1000', "", fmt="table"),
-            tgt(f'kube_pod_start_time{{{NS}}} - kube_pod_created{{{NS}}}', "", fmt="table"),
+            # Only show pods that are in Pending phase
+            # We filter by phase=Pending using the phase metric, then join
+            tgt(f'(kube_pod_status_phase{{{NS}, phase="Pending"}} == 1) * 0 + kube_pod_created{{{NS}}} * 1000', "", fmt="table"),
+            tgt(f'(kube_pod_status_phase{{{NS}, phase="Pending"}} == 1) * 0 + (time() - kube_pod_created{{{NS}}})', "", fmt="table"),
         ],
         transforms=[
             {"id": "merge", "options": {}},
@@ -362,50 +395,47 @@ def build():
                 "excludeByName": {"Time": True, "__name__": True, "uid": True,
                     "job": True, "instance": True, "service": True,
                     "container": True, "endpoint": True, "prometheus": True,
-                    "node": True},
+                    "node": True, "phase": True},
                 "renameByName": {
                     "pod": "Pod", "namespace": "Namespace",
-                    "Value #A": "Created At", "Value #B": "Started At",
-                    "Value #C": "Delay (seconds)"
+                    "Value #A": "Created At",
+                    "Value #B": "Pending Duration"
                 }}}
         ],
         overrides=[
-            {"matcher": {"id": "byName", "options": "Pod"}, "properties": [{"id": "custom.width", "value": 320}]},
+            {"matcher": {"id": "byName", "options": "Pod"}, "properties": [{"id": "custom.width", "value": 350}]},
             {"matcher": {"id": "byName", "options": "Namespace"}, "properties": [{"id": "custom.width", "value": 150}]},
             {"matcher": {"id": "byName", "options": "Created At"},
              "properties": [{"id": "unit", "value": "dateTimeAsIso"}]},
-            {"matcher": {"id": "byName", "options": "Started At"},
-             "properties": [{"id": "unit", "value": "dateTimeAsIso"}]},
-            {"matcher": {"id": "byName", "options": "Delay (seconds)"},
-             "properties": [{"id": "unit", "value": "s"}, {"id": "decimals", "value": 1},
+            {"matcher": {"id": "byName", "options": "Pending Duration"},
+             "properties": [{"id": "unit", "value": "dtdurations"},
                 {"id": "thresholds", "value": {"mode": "absolute", "steps": [
                     {"color": "#73BF69", "value": None},
-                    {"color": "#FF9830", "value": 30},
-                    {"color": "#FF4040", "value": 120}]}},
+                    {"color": "#FF9830", "value": 60},
+                    {"color": "#FF4040", "value": 300}]}},
                 {"id": "custom.displayMode", "value": "lcd-gauge"}]},
         ],
-        sort=[{"displayName": "Delay (seconds)", "desc": True}]
+        sort=[{"displayName": "Pending Duration", "desc": True}]
     ))
     y += 10
 
-    # Scheduled vs Not Scheduled
+    # Fallback: simple unscheduled pods table (no dependency on kube_pod_created)
     panels.append(ts(
-        "Pods Scheduled vs Not Scheduled",
-        "kube_pod_status_scheduled: condition=true means scheduler found a node. "
-        "condition=false means no node is available (insufficient resources, "
-        "taints/tolerations, node selectors, affinity rules).",
+        "Pods: Scheduled vs Not Scheduled",
+        "kube_pod_status_scheduled condition=true: scheduler found a node.\n"
+        "condition=false: no suitable node (insufficient resources, taints).\n"
+        "All 'Not Scheduled' pods are a subset of Pending pods.",
         {"h": 8, "w": 12, "x": 0, "y": y},
         [tgt(f'count(kube_pod_status_scheduled{{{NS}, condition="true"}} == 1) or vector(0)', "Scheduled"),
-         tgt(f'count(kube_pod_status_scheduled{{{NS}, condition="false"}} == 1) or vector(0)', "Not Scheduled (no node fits)")],
+         tgt(f'count(kube_pod_status_scheduled{{{NS}, condition="false"}} == 1) or vector(0)', "Not Scheduled")],
         axis="Pods"
     ))
 
-    # Currently unscheduled pods table
     panels.append(tbl(
-        "Currently Unscheduled Pods (waiting for a node)",
-        "Pods where PodScheduled condition is False. These are stuck in Pending. "
-        "Common reasons: insufficient CPU/memory/GPU, no matching node (taints, selectors), "
-        "PVC not bound. Check Events via: kubectl describe pod <name>",
+        "Unscheduled Pods (scheduler cannot find a node)",
+        "These pods have PodScheduled=False. The scheduler tried and failed.\n"
+        "Run: kubectl describe pod <name> | grep Events\n"
+        "to see the exact reason (e.g. 'Insufficient nvidia.com/gpu').",
         {"h": 8, "w": 12, "x": 12, "y": y},
         [tgt(f'kube_pod_status_scheduled{{{NS}, condition="false"}} == 1', "", fmt="table")],
         transforms=[
@@ -422,6 +452,81 @@ def build():
         ]
     ))
     y += 8
+
+    # ================================================================
+    # ROW 5: HISTORICAL SCHEDULING DELAY
+    # (for pods that DID get scheduled — how long did it take)
+    # ================================================================
+    panels.append(row("Historical Scheduling Delay (for pods that did start)", y)); y += 1
+
+    # Use kube_pod_start_time - kube_pod_created
+    # If kube_pod_created doesn't exist, this shows "No data"
+    panels.append(ts(
+        "Time from Creation to Running (per pod)",
+        "kube_pod_start_time - kube_pod_created = total delay from API submission "
+        "to first container running. Includes: scheduling + image pull + init containers.\n\n"
+        "NOTE: Requires kube_pod_created metric (kube-state-metrics v1.6+). "
+        "If this shows 'No data', your kube-state-metrics may not expose kube_pod_created.",
+        {"h": 8, "w": 12, "x": 0, "y": y},
+        [tgt(f'(kube_pod_start_time{{{NS}}} - on(pod, namespace) kube_pod_created{{{NS}}}) > 0', "{{pod}}")],
+        axis="Delay (seconds)", unit="s"
+    ))
+
+    # Alternative: just show start times as a timeline
+    panels.append(ts(
+        "Pod Start Times (when pods went Running)",
+        "Shows when each pod transitioned to Running. Useful for correlating "
+        "with cluster events (scaling, deployments, node additions).",
+        {"h": 8, "w": 12, "x": 12, "y": y},
+        [tgt(f'changes(kube_pod_start_time{{{NS}}}[5m])', "{{pod}}")],
+        axis="Starts"
+    ))
+    y += 8
+
+    # Scheduling delay table
+    panels.append(tbl(
+        "Pods by Startup Delay (longest first)",
+        "How long each pod took from creation to first container start. "
+        "Sorted by longest delay.\n\n"
+        "NOTE: Requires kube_pod_created metric. If empty, this metric is not "
+        "available in your cluster.",
+        {"h": 10, "w": 24, "x": 0, "y": y},
+        [
+            tgt(f'kube_pod_created{{{NS}}} * 1000', "", fmt="table"),
+            tgt(f'kube_pod_start_time{{{NS}}} * 1000', "", fmt="table"),
+            tgt(f'kube_pod_start_time{{{NS}}} - on(pod, namespace) kube_pod_created{{{NS}}}', "", fmt="table"),
+        ],
+        transforms=[
+            {"id": "merge", "options": {}},
+            {"id": "organize", "options": {
+                "excludeByName": {"Time": True, "__name__": True, "uid": True,
+                    "job": True, "instance": True, "service": True,
+                    "container": True, "endpoint": True, "prometheus": True,
+                    "node": True},
+                "renameByName": {
+                    "pod": "Pod", "namespace": "Namespace",
+                    "Value #A": "Created At", "Value #B": "Started At",
+                    "Value #C": "Startup Delay"
+                }}}
+        ],
+        overrides=[
+            {"matcher": {"id": "byName", "options": "Pod"}, "properties": [{"id": "custom.width", "value": 280}]},
+            {"matcher": {"id": "byName", "options": "Namespace"}, "properties": [{"id": "custom.width", "value": 130}]},
+            {"matcher": {"id": "byName", "options": "Created At"},
+             "properties": [{"id": "unit", "value": "dateTimeAsIso"}]},
+            {"matcher": {"id": "byName", "options": "Started At"},
+             "properties": [{"id": "unit", "value": "dateTimeAsIso"}]},
+            {"matcher": {"id": "byName", "options": "Startup Delay"},
+             "properties": [{"id": "unit", "value": "s"}, {"id": "decimals", "value": 1},
+                {"id": "thresholds", "value": {"mode": "absolute", "steps": [
+                    {"color": "#73BF69", "value": None},
+                    {"color": "#FF9830", "value": 30},
+                    {"color": "#FF4040", "value": 120}]}},
+                {"id": "custom.displayMode", "value": "lcd-gauge"}]},
+        ],
+        sort=[{"displayName": "Startup Delay", "desc": True}]
+    ))
+    y += 10
 
     # ================================================================
     # TEMPLATING
@@ -444,14 +549,14 @@ def build():
         "__inputs": [], "__requires": [
             {"type": "grafana", "id": "grafana", "name": "Grafana", "version": "9.0.0"},
             {"type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0"}],
-        "id": None, "uid": "k8s-pod-details-v2",
+        "id": None, "uid": "k8s-pod-details-v3",
         "title": "K8s Pod Details & Scheduling",
-        "description": "Rich pod information: phases, start/deletion times, errors, kill reasons, "
-                       "scheduling delay, readiness, restarts. Filtered by namespace.",
-        "tags": ["kubernetes", "pods", "scheduler", "errors", "phases", "lifecycle"],
+        "description": "Rich pod lifecycle: phases, start/completion/deletion times, exit reasons, "
+                       "pending analysis, scheduling delay, readiness, restarts.",
+        "tags": ["kubernetes", "pods", "lifecycle", "errors", "phases", "scheduling"],
         "style": "dark", "timezone": "browser", "editable": True,
         "graphTooltip": 1, "fiscalYearStartMonth": 0, "liveNow": False,
-        "refresh": "30s", "schemaVersion": 38, "version": 2,
+        "refresh": "30s", "schemaVersion": 38, "version": 3,
         "time": {"from": "now-6h", "to": "now"}, "timepicker": {},
         "annotations": {"list": [{"builtIn": 1, "datasource": {"type": "grafana", "uid": "-- Grafana --"},
             "enable": True, "hide": True, "iconColor": "rgba(0, 211, 255, 1)",

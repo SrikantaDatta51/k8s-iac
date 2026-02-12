@@ -15,16 +15,16 @@
         }
     ],
     "id": null,
-    "uid": "k8s-pod-details-v2",
+    "uid": "k8s-pod-details-v3",
     "title": "K8s Pod Details & Scheduling",
-    "description": "Rich pod information: phases, start/deletion times, errors, kill reasons, scheduling delay, readiness, restarts. Filtered by namespace.",
+    "description": "Rich pod lifecycle: phases, start/completion/deletion times, exit reasons, pending analysis, scheduling delay, readiness, restarts.",
     "tags": [
         "kubernetes",
         "pods",
-        "scheduler",
+        "lifecycle",
         "errors",
         "phases",
-        "lifecycle"
+        "scheduling"
     ],
     "style": "dark",
     "timezone": "browser",
@@ -34,7 +34,7 @@
     "liveNow": false,
     "refresh": "30s",
     "schemaVersion": 38,
-    "version": 2,
+    "version": 3,
     "time": {
         "from": "now-6h",
         "to": "now"
@@ -468,7 +468,7 @@
         {
             "id": 8,
             "title": "Pods by Phase Over Time",
-            "description": "Single query split by phase label. Each color = a phase. Height = total pod count.",
+            "description": "Single query split by phase label. Each color = a phase.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -527,7 +527,7 @@
         },
         {
             "type": "row",
-            "title": "All Pods \u2014 Start Time, Deletion Time, Uptime, Restarts",
+            "title": "Full Pod Lifecycle \u2014 Start, End, Exit Reason",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
@@ -541,14 +541,14 @@
         {
             "id": 10,
             "title": "All Pods \u2014 Full Lifecycle Table",
-            "description": "Every pod with: Start Time (ISO), Deletion Time (if being deleted/terminated), Uptime (duration since start), Total Restarts. Deletion Time appears when a pod is being terminated or has been deleted. If Deletion Time is empty, the pod is still active.",
+            "description": "Every pod with complete lifecycle timestamps:\n\u2022 Started At = kube_pod_start_time (when first container started)\n\u2022 Completed At = kube_pod_completion_time (when pod finished, for Jobs/completed pods)\n\u2022 Deleted At = kube_pod_deletion_timestamp (when pod deletion was requested)\n\u2022 Exit Reason = kube_pod_container_status_last_terminated_reason (OOMKilled, Error, Completed, etc.)\n\u2022 Uptime = how long since pod started\n\u2022 Total Restarts = cumulative container restart count\n\nIf Completed/Deleted columns are empty, the pod is still active.",
             "type": "table",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 14,
+                "h": 16,
                 "w": 24,
                 "x": 0,
                 "y": 13
@@ -570,7 +570,7 @@
                         "properties": [
                             {
                                 "id": "custom.width",
-                                "value": 320
+                                "value": 280
                             }
                         ]
                     },
@@ -582,7 +582,7 @@
                         "properties": [
                             {
                                 "id": "custom.width",
-                                "value": 150
+                                "value": 130
                             }
                         ]
                     },
@@ -595,6 +595,42 @@
                             {
                                 "id": "unit",
                                 "value": "dateTimeAsIso"
+                            },
+                            {
+                                "id": "custom.width",
+                                "value": 170
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Completed At"
+                        },
+                        "properties": [
+                            {
+                                "id": "unit",
+                                "value": "dateTimeAsIso"
+                            },
+                            {
+                                "id": "custom.width",
+                                "value": 170
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "color-text"
+                            },
+                            {
+                                "id": "thresholds",
+                                "value": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {
+                                            "color": "#5794F2",
+                                            "value": null
+                                        }
+                                    ]
+                                }
                             }
                         ]
                     },
@@ -607,6 +643,10 @@
                             {
                                 "id": "unit",
                                 "value": "dateTimeAsIso"
+                            },
+                            {
+                                "id": "custom.width",
+                                "value": 170
                             },
                             {
                                 "id": "custom.displayMode",
@@ -635,6 +675,10 @@
                             {
                                 "id": "unit",
                                 "value": "dtdurations"
+                            },
+                            {
+                                "id": "custom.width",
+                                "value": 120
                             }
                         ]
                     },
@@ -647,6 +691,10 @@
                             {
                                 "id": "decimals",
                                 "value": 0
+                            },
+                            {
+                                "id": "custom.width",
+                                "value": 130
                             },
                             {
                                 "id": "thresholds",
@@ -717,8 +765,9 @@
                             "namespace": "Namespace",
                             "Value #A": "Started At",
                             "Value #B": "Uptime",
-                            "Value #C": "Deleted At",
-                            "Value #D": "Total Restarts"
+                            "Value #C": "Completed At",
+                            "Value #D": "Deleted At",
+                            "Value #E": "Total Restarts"
                         }
                     }
                 }
@@ -752,13 +801,24 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "kube_pod_deletion_timestamp{namespace=~\"$namespace\"} * 1000",
+                    "expr": "kube_pod_completion_time{namespace=~\"$namespace\"} * 1000",
                     "legendFormat": "",
                     "format": "table",
                     "instant": true
                 },
                 {
                     "refId": "D",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "kube_pod_deletion_timestamp{namespace=~\"$namespace\"} * 1000",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                },
+                {
+                    "refId": "E",
                     "datasource": {
                         "type": "prometheus",
                         "uid": "${datasource}"
@@ -771,22 +831,167 @@
             ]
         },
         {
+            "id": 11,
+            "title": "Container Exit Reasons \u2014 Last Termination per Container",
+            "description": "For every container, the reason it was last terminated:\n\u2022 OOMKilled = container exceeded memory limit, killed by K8s\n\u2022 Error = container exited with non-zero exit code (application crash)\n\u2022 Completed = container finished normally (exit code 0)\n\u2022 ContainerCannotRun = container runtime error\n\u2022 DeadlineExceeded = Job exceeded activeDeadlineSeconds\n\u2022 Evicted = pod evicted by kubelet (disk/memory pressure)\n\nThis shows the most recent termination \u2014 useful for diagnosing crash loops.",
+            "type": "table",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 24,
+                "x": 0,
+                "y": 29
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Pod"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 280
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Container"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 180
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Namespace"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 130
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Exit / Kill Reason"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.displayMode",
+                                "value": "color-text"
+                            },
+                            {
+                                "id": "custom.width",
+                                "value": 200
+                            },
+                            {
+                                "id": "thresholds",
+                                "value": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {
+                                            "color": "#FF4040",
+                                            "value": null
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "displayName": "Exit / Kill Reason",
+                        "desc": false
+                    }
+                ],
+                "footer": {
+                    "show": false,
+                    "reducer": [
+                        "sum"
+                    ],
+                    "fields": []
+                }
+            },
+            "transformations": [
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true,
+                            "uid": true,
+                            "job": true,
+                            "instance": true,
+                            "service": true,
+                            "endpoint": true,
+                            "prometheus": true,
+                            "Value": true,
+                            "node": true
+                        },
+                        "renameByName": {
+                            "pod": "Pod",
+                            "namespace": "Namespace",
+                            "container": "Container",
+                            "reason": "Exit / Kill Reason"
+                        }
+                    }
+                }
+            ],
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "kube_pod_container_status_last_terminated_reason{namespace=~\"$namespace\"} == 1",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                }
+            ]
+        },
+        {
             "type": "row",
-            "title": "Pod Errors \u2014 Why Pods Fail, Get Killed, or Get Stuck",
+            "title": "Pod Errors \u2014 Waiting, Killed, Evicted",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 27
+                "y": 39
             },
-            "id": 11,
+            "id": 12,
             "panels": []
         },
         {
-            "id": 12,
+            "id": 13,
             "title": "Containers Stuck in Waiting State (by Reason)",
-            "description": "Containers that are NOT running \u2014 stuck waiting. CrashLoopBackOff = container keeps crashing and K8s is backing off restarts. ImagePullBackOff = cannot pull container image. CreateContainerConfigError = bad config (missing secret/configmap). ErrImagePull = image doesn't exist or no auth.",
+            "description": "Containers NOT running \u2014 stuck waiting.\n\u2022 CrashLoopBackOff = keeps crashing, K8s backing off restarts\n\u2022 ImagePullBackOff / ErrImagePull = cannot pull image\n\u2022 CreateContainerConfigError = missing secret/configmap\n\u2022 ContainerCreating = still starting up (normal if brief)",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -796,7 +1001,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 28
+                "y": 40
             },
             "fieldConfig": {
                 "defaults": {
@@ -843,9 +1048,9 @@
             ]
         },
         {
-            "id": 13,
+            "id": 14,
             "title": "Containers Killed or Terminated (by Reason)",
-            "description": "Containers that were forcefully stopped. OOMKilled = ran out of memory, K8s killed it. Error = container exited with non-zero code (application crash). Completed = finished normally (for Jobs). ContainerCannotRun = runtime error starting container. DeadlineExceeded = Job exceeded activeDeadlineSeconds.",
+            "description": "Containers that were forcefully stopped.\n\u2022 OOMKilled = ran out of memory\n\u2022 Error = exited non-zero (app crash)\n\u2022 Completed = finished normally\n\u2022 ContainerCannotRun = runtime error",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -855,7 +1060,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 28
+                "y": 40
             },
             "fieldConfig": {
                 "defaults": {
@@ -902,9 +1107,9 @@
             ]
         },
         {
-            "id": 14,
-            "title": "Which Pods Are Stuck Right Now \u2014 Waiting Reasons",
-            "description": "List of pods with containers currently in Waiting state. These pods are NOT running. The Reason column tells you exactly why.",
+            "id": 15,
+            "title": "Which Pods Are Stuck Right Now",
+            "description": "Pods with containers in Waiting state. These are NOT running.",
             "type": "table",
             "datasource": {
                 "type": "prometheus",
@@ -914,7 +1119,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 36
+                "y": 48
             },
             "fieldConfig": {
                 "defaults": {
@@ -940,7 +1145,7 @@
                     {
                         "matcher": {
                             "id": "byName",
-                            "options": "Why It Is Stuck"
+                            "options": "Why Stuck"
                         },
                         "properties": [
                             {
@@ -993,7 +1198,7 @@
                             "pod": "Pod",
                             "namespace": "Namespace",
                             "container": "Container",
-                            "reason": "Why It Is Stuck"
+                            "reason": "Why Stuck"
                         }
                     }
                 }
@@ -1013,120 +1218,9 @@
             ]
         },
         {
-            "id": 15,
-            "title": "Last Kill/Termination Reason per Container",
-            "description": "For each container, why it was LAST killed or terminated. OOMKilled = not enough memory limit. Error = app crashed. This persists even after restart so you can see the cause.",
-            "type": "table",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 36
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "custom": {
-                        "align": "auto",
-                        "displayMode": "auto",
-                        "filterable": true
-                    }
-                },
-                "overrides": [
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "Pod"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.width",
-                                "value": 260
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "Kill Reason"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.displayMode",
-                                "value": "color-text"
-                            },
-                            {
-                                "id": "thresholds",
-                                "value": {
-                                    "mode": "absolute",
-                                    "steps": [
-                                        {
-                                            "color": "#FF4040",
-                                            "value": null
-                                        }
-                                    ]
-                                }
-                            }
-                        ]
-                    }
-                ]
-            },
-            "options": {
-                "showHeader": true,
-                "sortBy": [],
-                "footer": {
-                    "show": false,
-                    "reducer": [
-                        "sum"
-                    ],
-                    "fields": []
-                }
-            },
-            "transformations": [
-                {
-                    "id": "organize",
-                    "options": {
-                        "excludeByName": {
-                            "Time": true,
-                            "__name__": true,
-                            "uid": true,
-                            "job": true,
-                            "instance": true,
-                            "service": true,
-                            "endpoint": true,
-                            "prometheus": true,
-                            "Value": true
-                        },
-                        "renameByName": {
-                            "pod": "Pod",
-                            "namespace": "Namespace",
-                            "container": "Container",
-                            "reason": "Kill Reason"
-                        }
-                    }
-                }
-            ],
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "kube_pod_container_status_last_terminated_reason{namespace=~\"$namespace\"} == 1",
-                    "legendFormat": "",
-                    "format": "table",
-                    "instant": true
-                }
-            ]
-        },
-        {
             "id": 16,
-            "title": "Pod-Level Status Reasons Over Time",
-            "description": "Pods with a special status reason: Evicted = pod was evicted by kubelet (disk pressure, memory pressure, PID pressure). NodeLost = node became unreachable. UnexpectedAdmissionError = admission webhook error.",
+            "title": "Pod Status Reasons (Evicted, NodeLost, etc.)",
+            "description": "\u2022 Evicted = kubelet evicted the pod (disk/memory/PID pressure)\n\u2022 NodeLost = node became unreachable\n\u2022 UnexpectedAdmissionError = admission webhook error",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1135,8 +1229,8 @@
             "gridPos": {
                 "h": 8,
                 "w": 12,
-                "x": 0,
-                "y": 44
+                "x": 12,
+                "y": 48
             },
             "fieldConfig": {
                 "defaults": {
@@ -1184,8 +1278,8 @@
         },
         {
             "id": 17,
-            "title": "Pod Readiness Over Time",
-            "description": "Ready = pod passes readiness probe, receiving traffic. Not Ready = pod exists but is NOT receiving traffic (failing readiness probe). High 'Not Ready' count = service degradation.",
+            "title": "Pod Readiness \u2014 Ready vs Not Ready",
+            "description": "Ready = passing readiness probe, receiving traffic. Not Ready = exists but NOT receiving traffic.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1194,8 +1288,8 @@
             "gridPos": {
                 "h": 8,
                 "w": 12,
-                "x": 12,
-                "y": 44
+                "x": 0,
+                "y": 56
             },
             "fieldConfig": {
                 "defaults": {
@@ -1251,81 +1345,9 @@
             ]
         },
         {
-            "type": "row",
-            "title": "Restart Analysis \u2014 Crash Loops & OOMKills",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 52
-            },
             "id": 18,
-            "panels": []
-        },
-        {
-            "id": 19,
-            "title": "Total Restarts per Pod (cumulative)",
-            "description": "Cumulative restart count over time. A steep rising line = active crash loop. Flat line = stable pod. Each line = one pod.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 53
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Restart Count",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum by (pod) (kube_pod_container_status_restarts_total{namespace=~\"$namespace\"})",
-                    "legendFormat": "{{pod}}"
-                }
-            ]
-        },
-        {
-            "id": 20,
-            "title": "Restart Rate per Pod (restarts/sec)",
-            "description": "Rate of restarts. Any sustained rate > 0 means the pod is actively cycling. Spikes indicate sudden failures (OOMKill, crash).",
+            "title": "Container Restart Rate (restarts/sec)",
+            "description": "Rate of restarts per pod. Any sustained rate > 0 = pod is crash-looping.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1335,7 +1357,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 53
+                "y": 56
             },
             "fieldConfig": {
                 "defaults": {
@@ -1383,40 +1405,40 @@
         },
         {
             "type": "row",
-            "title": "Pod Scheduling \u2014 Time to Schedule (from kube-state-metrics)",
+            "title": "Pending Pod Analysis \u2014 How Long Pods Wait Before Running",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 61
+                "y": 64
             },
-            "id": 21,
+            "id": 19,
             "panels": []
         },
         {
-            "id": 22,
-            "title": "Time from Pod Creation to Running (scheduling + startup delay)",
-            "description": "kube_pod_start_time - kube_pod_created = total time from when the pod object was created in the API until the first container started running. This includes: scheduler queue wait + scheduling decision + image pull + init containers. High values = scheduling delays, slow image pulls, or resource pressure.",
+            "id": 20,
+            "title": "Pending Pods Over Time",
+            "description": "How many pods are in Pending state at any point. A rising trend = cluster cannot schedule pods fast enough (resource pressure, taints, node selectors, PVC issues).",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 10,
-                "w": 24,
+                "h": 8,
+                "w": 12,
                 "x": 0,
-                "y": 62
+                "y": 65
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "s",
+                    "unit": "short",
                     "custom": {
                         "lineWidth": 2,
                         "fillOpacity": 15,
                         "gradientMode": "none",
-                        "axisLabel": "Seconds to Start",
+                        "axisLabel": "Pods",
                         "drawStyle": "line",
                         "pointSize": 5,
                         "showPoints": "auto",
@@ -1448,15 +1470,83 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "(kube_pod_start_time{namespace=~\"$namespace\"} - kube_pod_created{namespace=~\"$namespace\"}) > 0",
+                    "expr": "count(kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Pending\"} == 1) or vector(0)",
+                    "legendFormat": "Pending Pods"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "count(kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Running\"} == 1) or vector(0)",
+                    "legendFormat": "Running Pods"
+                }
+            ]
+        },
+        {
+            "id": 21,
+            "title": "Individual Pods in Pending State",
+            "description": "Each line = a pod currently in Pending. If a line persists for minutes, the pod cannot be scheduled. Check events for the reason.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 65
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 15,
+                        "gradientMode": "none",
+                        "axisLabel": "Pending (1=yes)",
+                        "drawStyle": "line",
+                        "pointSize": 5,
+                        "showPoints": "auto",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Pending\"} == 1",
                     "legendFormat": "{{pod}}"
                 }
             ]
         },
         {
-            "id": 23,
-            "title": "Pods by Scheduling Delay (longest first)",
-            "description": "How long each pod took from creation to first container start. Created At = when API received the pod spec. Started At = when first container ran. Delay = the gap (scheduling + image pull + init). Sort by Delay to find pods that took unusually long.",
+            "id": 22,
+            "title": "Currently Pending Pods \u2014 How Long They Have Been Waiting",
+            "description": "Pods currently in Pending phase. Shows:\n\u2022 Created At = when the pod spec was submitted to the API (kube_pod_created * 1000)\n\u2022 Pending Duration = time() - kube_pod_created (how long it's been waiting)\n\nIf Created At shows empty or 1970, the kube_pod_created metric may not be available in your kube-state-metrics version. In that case, use 'kubectl get pod -o wide' to check creation times.\n\nCommon reasons for being stuck in Pending:\n- Insufficient CPU/Memory/GPU on any node\n- Node taints with no matching tolerations\n- Node selector / affinity rules no node matches\n- PVC not bound (storage not available)\n- Too many pods on node (PodLimit)",
             "type": "table",
             "datasource": {
                 "type": "prometheus",
@@ -1466,7 +1556,7 @@
                 "h": 10,
                 "w": 24,
                 "x": 0,
-                "y": 72
+                "y": 73
             },
             "fieldConfig": {
                 "defaults": {
@@ -1485,7 +1575,7 @@
                         "properties": [
                             {
                                 "id": "custom.width",
-                                "value": 320
+                                "value": 350
                             }
                         ]
                     },
@@ -1516,28 +1606,12 @@
                     {
                         "matcher": {
                             "id": "byName",
-                            "options": "Started At"
+                            "options": "Pending Duration"
                         },
                         "properties": [
                             {
                                 "id": "unit",
-                                "value": "dateTimeAsIso"
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "Delay (seconds)"
-                        },
-                        "properties": [
-                            {
-                                "id": "unit",
-                                "value": "s"
-                            },
-                            {
-                                "id": "decimals",
-                                "value": 1
+                                "value": "dtdurations"
                             },
                             {
                                 "id": "thresholds",
@@ -1550,11 +1624,11 @@
                                         },
                                         {
                                             "color": "#FF9830",
-                                            "value": 30
+                                            "value": 60
                                         },
                                         {
                                             "color": "#FF4040",
-                                            "value": 120
+                                            "value": 300
                                         }
                                     ]
                                 }
@@ -1571,7 +1645,7 @@
                 "showHeader": true,
                 "sortBy": [
                     {
-                        "displayName": "Delay (seconds)",
+                        "displayName": "Pending Duration",
                         "desc": true
                     }
                 ],
@@ -1601,14 +1675,14 @@
                             "container": true,
                             "endpoint": true,
                             "prometheus": true,
-                            "node": true
+                            "node": true,
+                            "phase": true
                         },
                         "renameByName": {
                             "pod": "Pod",
                             "namespace": "Namespace",
                             "Value #A": "Created At",
-                            "Value #B": "Started At",
-                            "Value #C": "Delay (seconds)"
+                            "Value #B": "Pending Duration"
                         }
                     }
                 }
@@ -1620,7 +1694,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "kube_pod_created{namespace=~\"$namespace\"} * 1000",
+                    "expr": "(kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Pending\"} == 1) * 0 + kube_pod_created{namespace=~\"$namespace\"} * 1000",
                     "legendFormat": "",
                     "format": "table",
                     "instant": true
@@ -1631,18 +1705,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "kube_pod_start_time{namespace=~\"$namespace\"} * 1000",
-                    "legendFormat": "",
-                    "format": "table",
-                    "instant": true
-                },
-                {
-                    "refId": "C",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "kube_pod_start_time{namespace=~\"$namespace\"} - kube_pod_created{namespace=~\"$namespace\"}",
+                    "expr": "(kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Pending\"} == 1) * 0 + (time() - kube_pod_created{namespace=~\"$namespace\"})",
                     "legendFormat": "",
                     "format": "table",
                     "instant": true
@@ -1650,9 +1713,9 @@
             ]
         },
         {
-            "id": 24,
-            "title": "Pods Scheduled vs Not Scheduled",
-            "description": "kube_pod_status_scheduled: condition=true means scheduler found a node. condition=false means no node is available (insufficient resources, taints/tolerations, node selectors, affinity rules).",
+            "id": 23,
+            "title": "Pods: Scheduled vs Not Scheduled",
+            "description": "kube_pod_status_scheduled condition=true: scheduler found a node.\ncondition=false: no suitable node (insufficient resources, taints).\nAll 'Not Scheduled' pods are a subset of Pending pods.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1662,7 +1725,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 82
+                "y": 83
             },
             "fieldConfig": {
                 "defaults": {
@@ -1713,14 +1776,14 @@
                         "uid": "${datasource}"
                     },
                     "expr": "count(kube_pod_status_scheduled{namespace=~\"$namespace\", condition=\"false\"} == 1) or vector(0)",
-                    "legendFormat": "Not Scheduled (no node fits)"
+                    "legendFormat": "Not Scheduled"
                 }
             ]
         },
         {
-            "id": 25,
-            "title": "Currently Unscheduled Pods (waiting for a node)",
-            "description": "Pods where PodScheduled condition is False. These are stuck in Pending. Common reasons: insufficient CPU/memory/GPU, no matching node (taints, selectors), PVC not bound. Check Events via: kubectl describe pod <name>",
+            "id": 24,
+            "title": "Unscheduled Pods (scheduler cannot find a node)",
+            "description": "These pods have PodScheduled=False. The scheduler tried and failed.\nRun: kubectl describe pod <name> | grep Events\nto see the exact reason (e.g. 'Insufficient nvidia.com/gpu').",
             "type": "table",
             "datasource": {
                 "type": "prometheus",
@@ -1730,7 +1793,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 82
+                "y": 83
             },
             "fieldConfig": {
                 "defaults": {
@@ -1797,6 +1860,333 @@
                         "uid": "${datasource}"
                     },
                     "expr": "kube_pod_status_scheduled{namespace=~\"$namespace\", condition=\"false\"} == 1",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "Historical Scheduling Delay (for pods that did start)",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 91
+            },
+            "id": 25,
+            "panels": []
+        },
+        {
+            "id": 26,
+            "title": "Time from Creation to Running (per pod)",
+            "description": "kube_pod_start_time - kube_pod_created = total delay from API submission to first container running. Includes: scheduling + image pull + init containers.\n\nNOTE: Requires kube_pod_created metric (kube-state-metrics v1.6+). If this shows 'No data', your kube-state-metrics may not expose kube_pod_created.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 92
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "s",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 15,
+                        "gradientMode": "none",
+                        "axisLabel": "Delay (seconds)",
+                        "drawStyle": "line",
+                        "pointSize": 5,
+                        "showPoints": "auto",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "(kube_pod_start_time{namespace=~\"$namespace\"} - on(pod, namespace) kube_pod_created{namespace=~\"$namespace\"}) > 0",
+                    "legendFormat": "{{pod}}"
+                }
+            ]
+        },
+        {
+            "id": 27,
+            "title": "Pod Start Times (when pods went Running)",
+            "description": "Shows when each pod transitioned to Running. Useful for correlating with cluster events (scaling, deployments, node additions).",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 92
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 15,
+                        "gradientMode": "none",
+                        "axisLabel": "Starts",
+                        "drawStyle": "line",
+                        "pointSize": 5,
+                        "showPoints": "auto",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "changes(kube_pod_start_time{namespace=~\"$namespace\"}[5m])",
+                    "legendFormat": "{{pod}}"
+                }
+            ]
+        },
+        {
+            "id": 28,
+            "title": "Pods by Startup Delay (longest first)",
+            "description": "How long each pod took from creation to first container start. Sorted by longest delay.\n\nNOTE: Requires kube_pod_created metric. If empty, this metric is not available in your cluster.",
+            "type": "table",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 24,
+                "x": 0,
+                "y": 100
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Pod"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 280
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Namespace"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 130
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Created At"
+                        },
+                        "properties": [
+                            {
+                                "id": "unit",
+                                "value": "dateTimeAsIso"
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Started At"
+                        },
+                        "properties": [
+                            {
+                                "id": "unit",
+                                "value": "dateTimeAsIso"
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Startup Delay"
+                        },
+                        "properties": [
+                            {
+                                "id": "unit",
+                                "value": "s"
+                            },
+                            {
+                                "id": "decimals",
+                                "value": 1
+                            },
+                            {
+                                "id": "thresholds",
+                                "value": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {
+                                            "color": "#73BF69",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#FF9830",
+                                            "value": 30
+                                        },
+                                        {
+                                            "color": "#FF4040",
+                                            "value": 120
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "lcd-gauge"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "displayName": "Startup Delay",
+                        "desc": true
+                    }
+                ],
+                "footer": {
+                    "show": false,
+                    "reducer": [
+                        "sum"
+                    ],
+                    "fields": []
+                }
+            },
+            "transformations": [
+                {
+                    "id": "merge",
+                    "options": {}
+                },
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true,
+                            "uid": true,
+                            "job": true,
+                            "instance": true,
+                            "service": true,
+                            "container": true,
+                            "endpoint": true,
+                            "prometheus": true,
+                            "node": true
+                        },
+                        "renameByName": {
+                            "pod": "Pod",
+                            "namespace": "Namespace",
+                            "Value #A": "Created At",
+                            "Value #B": "Started At",
+                            "Value #C": "Startup Delay"
+                        }
+                    }
+                }
+            ],
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "kube_pod_created{namespace=~\"$namespace\"} * 1000",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "kube_pod_start_time{namespace=~\"$namespace\"} * 1000",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                },
+                {
+                    "refId": "C",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "kube_pod_start_time{namespace=~\"$namespace\"} - on(pod, namespace) kube_pod_created{namespace=~\"$namespace\"}",
                     "legendFormat": "",
                     "format": "table",
                     "instant": true
