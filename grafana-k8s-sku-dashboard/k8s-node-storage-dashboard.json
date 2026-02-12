@@ -15,16 +15,16 @@
         }
     ],
     "id": null,
-    "uid": "k8s-node-storage-v1",
+    "uid": "k8s-node-storage-v2",
     "title": "K8s Node Storage & Pod Lifecycle",
-    "description": "Pod lifecycle tracking, node filesystem usage across all mount points, /var deep dive with per-pod ephemeral storage, container layers, and volume analysis.",
+    "description": "Pod lifecycle, per-pod ephemeral storage, node filesystem (/var deep dive), EmptyDir/PVC volume tracking, container I/O rates.",
     "tags": [
         "kubernetes",
         "storage",
         "filesystem",
-        "var",
         "ephemeral",
-        "pods"
+        "pods",
+        "var"
     ],
     "style": "dark",
     "timezone": "browser",
@@ -34,7 +34,7 @@
     "liveNow": false,
     "refresh": "30s",
     "schemaVersion": 38,
-    "version": 1,
+    "version": 2,
     "time": {
         "from": "now-6h",
         "to": "now"
@@ -94,36 +94,13 @@
                 "regex": "",
                 "sort": 1,
                 "skipUrlSync": false
-            },
-            {
-                "name": "node",
-                "type": "query",
-                "label": "Node (multi-select)",
-                "datasource": {
-                    "type": "prometheus",
-                    "uid": "${datasource}"
-                },
-                "definition": "label_values(kube_pod_info{namespace=~\"$namespace\"}, node)",
-                "query": {
-                    "query": "label_values(kube_pod_info{namespace=~\"$namespace\"}, node)",
-                    "refId": "nd"
-                },
-                "current": {},
-                "hide": 0,
-                "includeAll": true,
-                "multi": true,
-                "options": [],
-                "refresh": 2,
-                "regex": "",
-                "sort": 1,
-                "skipUrlSync": false
             }
         ]
     },
     "panels": [
         {
             "type": "row",
-            "title": "Pod Lifecycle \u2014 Start / Shutdown Times",
+            "title": "Pod Lifecycle",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
@@ -136,8 +113,8 @@
         },
         {
             "id": 2,
-            "title": "Running Pod Count Over Time",
-            "description": "Number of pods in Running phase over time for selected scope.",
+            "title": "Pods by Phase Over Time",
+            "description": "One query: sum by (phase) kube_pod_status_phase. Shows Running, Pending, Succeeded, Failed, Unknown all in one graph.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -188,33 +165,15 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "count((kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Running\"} == 1) and on(pod, namespace) kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"})",
-                    "legendFormat": "Running Pods"
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "count((kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Pending\"} == 1) and on(pod, namespace) kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"})",
-                    "legendFormat": "Pending Pods"
-                },
-                {
-                    "refId": "C",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "count((kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Failed\"} == 1) and on(pod, namespace) kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"})",
-                    "legendFormat": "Failed Pods"
+                    "expr": "sum by (phase) (kube_pod_status_phase{namespace=~\"$namespace\"} == 1)",
+                    "legendFormat": "{{phase}}"
                 }
             ]
         },
         {
             "id": 3,
-            "title": "Pod Starts and Restarts Over Time",
-            "description": "Rate of pod container starts and restarts. Spikes indicate scaling events or crash loops.",
+            "title": "Container Restart Rate per Pod",
+            "description": "Rate of container restarts. Spikes mean crash loops or OOMKills.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -233,7 +192,7 @@
                         "lineWidth": 2,
                         "fillOpacity": 15,
                         "gradientMode": "none",
-                        "axisLabel": "Rate",
+                        "axisLabel": "Restarts/sec",
                         "drawStyle": "line",
                         "pointSize": 5,
                         "showPoints": "auto",
@@ -265,24 +224,15 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum(rate(kube_pod_container_status_restarts_total{namespace=~\"$namespace\", node=~\"$node\"}[5m])) by (pod)",
-                    "legendFormat": "{{pod}} restarts/s"
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "count(changes(kube_pod_start_time{namespace=~\"$namespace\", node=~\"$node\"}[5m]))",
-                    "legendFormat": "New Pod Starts"
+                    "expr": "sum by (pod) (rate(kube_pod_container_status_restarts_total{namespace=~\"$namespace\"}[5m]))",
+                    "legendFormat": "{{pod}}"
                 }
             ]
         },
         {
             "id": 4,
             "title": "All Pods \u2014 Start Time, Phase, Uptime",
-            "description": "Every pod in scope with its start time, current phase, node, and uptime. Sorted by most recently started. Start time is a Unix timestamp converted to date.",
+            "description": "Simple pod list. Start time, uptime, and phase from kube-state-metrics. No node filter since these metrics do not carry a node label.",
             "type": "table",
             "datasource": {
                 "type": "prometheus",
@@ -330,19 +280,7 @@
                     {
                         "matcher": {
                             "id": "byName",
-                            "options": "Node"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.width",
-                                "value": 200
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "Start Time (Unix)"
+                            "options": "Started At"
                         },
                         "properties": [
                             {
@@ -354,7 +292,7 @@
                     {
                         "matcher": {
                             "id": "byName",
-                            "options": "Uptime (seconds)"
+                            "options": "Uptime"
                         },
                         "properties": [
                             {
@@ -369,7 +307,7 @@
                 "showHeader": true,
                 "sortBy": [
                     {
-                        "displayName": "Start Time (Unix)",
+                        "displayName": "Started At",
                         "desc": true
                     }
                 ],
@@ -404,9 +342,8 @@
                             "pod": "Pod",
                             "namespace": "Namespace",
                             "node": "Node",
-                            "Value #A": "Start Time (Unix)",
-                            "Value #B": "Uptime (seconds)",
-                            "phase": "Phase"
+                            "Value #A": "Started At",
+                            "Value #B": "Uptime"
                         }
                     }
                 }
@@ -418,7 +355,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "kube_pod_start_time{namespace=~\"$namespace\", node=~\"$node\"}",
+                    "expr": "kube_pod_start_time{namespace=~\"$namespace\"} * 1000",
                     "legendFormat": "",
                     "format": "table",
                     "instant": true
@@ -429,7 +366,299 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "time() - kube_pod_start_time{namespace=~\"$namespace\", node=~\"$node\"}",
+                    "expr": "time() - kube_pod_start_time{namespace=~\"$namespace\"}",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "Per-Pod Ephemeral Storage Usage (container_fs_usage_bytes)",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 19
+            },
+            "id": 5,
+            "panels": []
+        },
+        {
+            "id": 6,
+            "title": "Ephemeral Storage per Pod \u2014 Stacked",
+            "description": "Each color = a pod. container_fs_usage_bytes tracks each container's writable layer and ephemeral writes (typically on /var). Height = total across all pods.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 0,
+                "y": 20
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "bytes",
+                    "custom": {
+                        "lineWidth": 0,
+                        "fillOpacity": 80,
+                        "gradientMode": "none",
+                        "axisLabel": "Bytes",
+                        "drawStyle": "bars",
+                        "stacking": {
+                            "mode": "normal"
+                        },
+                        "showPoints": "never"
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum by (pod) (container_fs_usage_bytes{namespace=~\"$namespace\", container!=\"\"})",
+                    "legendFormat": "{{pod}}"
+                }
+            ]
+        },
+        {
+            "id": 7,
+            "title": "Ephemeral Storage per Pod \u2014 Individual",
+            "description": "Each line = one pod. Compare against ephemeral-storage limits (dashed red).",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 12,
+                "y": 20
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "bytes",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 15,
+                        "gradientMode": "none",
+                        "axisLabel": "Bytes",
+                        "drawStyle": "line",
+                        "pointSize": 5,
+                        "showPoints": "auto",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byRegexp",
+                            "options": ".*Limit.*"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.lineStyle",
+                                "value": {
+                                    "fill": "dash",
+                                    "dash": [
+                                        6,
+                                        4
+                                    ]
+                                }
+                            },
+                            {
+                                "id": "custom.fillOpacity",
+                                "value": 0
+                            },
+                            {
+                                "id": "color",
+                                "value": {
+                                    "mode": "fixed",
+                                    "fixedColor": "#FF4040"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum by (pod) (container_fs_usage_bytes{namespace=~\"$namespace\", container!=\"\"})",
+                    "legendFormat": "{{pod}} Used"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum by (pod) (kube_pod_container_resource_limits{namespace=~\"$namespace\", resource=~\"ephemeral.storage\"})",
+                    "legendFormat": "{{pod}} Limit"
+                }
+            ]
+        },
+        {
+            "id": 8,
+            "title": "Top Pods by Ephemeral Storage",
+            "description": "Pods ranked by container filesystem usage. Shows usage, request, and limit.",
+            "type": "table",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 30
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Pod"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 300
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byRegexp",
+                            "options": "Current Usage|Request|Limit"
+                        },
+                        "properties": [
+                            {
+                                "id": "unit",
+                                "value": "bytes"
+                            },
+                            {
+                                "id": "decimals",
+                                "value": 2
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "displayName": "Current Usage",
+                        "desc": true
+                    }
+                ],
+                "footer": {
+                    "show": true,
+                    "reducer": [
+                        "sum"
+                    ],
+                    "fields": [
+                        "Current Usage",
+                        "Request",
+                        "Limit"
+                    ]
+                }
+            },
+            "transformations": [
+                {
+                    "id": "merge",
+                    "options": {}
+                },
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true
+                        },
+                        "renameByName": {
+                            "pod": "Pod",
+                            "namespace": "Namespace",
+                            "Value #A": "Current Usage",
+                            "Value #B": "Request",
+                            "Value #C": "Limit"
+                        }
+                    }
+                }
+            ],
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum by (pod, namespace) (container_fs_usage_bytes{namespace=~\"$namespace\", container!=\"\"})",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum by (pod, namespace) (kube_pod_container_resource_requests{namespace=~\"$namespace\", resource=~\"ephemeral.storage\"})",
                     "legendFormat": "",
                     "format": "table",
                     "instant": true
@@ -440,7 +669,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "(kube_pod_status_phase{namespace=~\"$namespace\"} == 1) * on(pod, namespace) group_left(node) kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"}",
+                    "expr": "sum by (pod, namespace) (kube_pod_container_resource_limits{namespace=~\"$namespace\", resource=~\"ephemeral.storage\"})",
                     "legendFormat": "",
                     "format": "table",
                     "instant": true
@@ -448,9 +677,9 @@
             ]
         },
         {
-            "id": 5,
-            "title": "Recently Terminated Pods (Phase Changes)",
-            "description": "Tracks pods entering Succeeded or Failed phase. Useful for identifying workload completions and failures.",
+            "id": 9,
+            "title": "Ephemeral Storage by Container (writable layer)",
+            "description": "Per-container writable layer size. Each container writes to an overlay filesystem, this metric tracks that layer. Pod/container granularity.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -460,16 +689,89 @@
                 "h": 8,
                 "w": 24,
                 "x": 0,
-                "y": 19
+                "y": 38
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "short",
+                    "unit": "bytes",
+                    "custom": {
+                        "lineWidth": 0,
+                        "fillOpacity": 80,
+                        "gradientMode": "none",
+                        "axisLabel": "Writable Layer",
+                        "drawStyle": "bars",
+                        "stacking": {
+                            "mode": "normal"
+                        },
+                        "showPoints": "never"
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "container_fs_usage_bytes{namespace=~\"$namespace\", container!=\"\", container!=\"POD\"}",
+                    "legendFormat": "{{pod}}/{{container}}"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "Node Filesystem \u2014 /var and All Mount Points",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 46
+            },
+            "id": 10,
+            "panels": []
+        },
+        {
+            "id": 11,
+            "title": "Filesystem Usage % \u2014 All Mount Points",
+            "description": "Each line = a mount point on any node. Shows how full each filesystem is. node_filesystem metrics come from node-exporter. If empty, node-exporter may not be installed or metrics may use 'instance' instead of 'node' label.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 0,
+                "y": 47
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percentunit",
                     "custom": {
                         "lineWidth": 2,
                         "fillOpacity": 15,
                         "gradientMode": "none",
-                        "axisLabel": "Pod Count",
+                        "axisLabel": "Usage %",
                         "drawStyle": "line",
                         "pointSize": 5,
                         "showPoints": "auto",
@@ -501,8 +803,219 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "count((kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Succeeded\"} == 1) and on(pod, namespace) kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"}) or vector(0)",
-                    "legendFormat": "Succeeded Pods"
+                    "expr": "1 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs\"})",
+                    "legendFormat": "{{instance}}:{{mountpoint}}"
+                }
+            ]
+        },
+        {
+            "id": 12,
+            "title": "/var Usage % Over Time",
+            "description": "Specifically tracks /var and /var/* mount points. /var is where Kubernetes stores container images, overlayfs layers, logs, and ephemeral volumes.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 12,
+                "y": 47
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percentunit",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 15,
+                        "gradientMode": "none",
+                        "axisLabel": "/var Usage %",
+                        "drawStyle": "line",
+                        "pointSize": 5,
+                        "showPoints": "auto",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "1 - (node_filesystem_avail_bytes{mountpoint=~\"/var.*\", fstype!~\"tmpfs|overlay\"} / node_filesystem_size_bytes{mountpoint=~\"/var.*\", fstype!~\"tmpfs|overlay\"})",
+                    "legendFormat": "{{instance}}:{{mountpoint}} ({{device}})"
+                }
+            ]
+        },
+        {
+            "id": 13,
+            "title": "Used Bytes Over Time \u2014 All Filesystems",
+            "description": "Absolute bytes used on each filesystem. Each line = one mount point.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 0,
+                "y": 57
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "bytes",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 15,
+                        "gradientMode": "none",
+                        "axisLabel": "Used",
+                        "drawStyle": "line",
+                        "pointSize": 5,
+                        "showPoints": "auto",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs\"} - node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs\"}",
+                    "legendFormat": "{{instance}}:{{mountpoint}}"
+                }
+            ]
+        },
+        {
+            "id": 14,
+            "title": "/var Used vs Total Capacity",
+            "description": "Red dashed = total /var capacity. Blue = used. Gap = free space.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 12,
+                "y": 57
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "bytes",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 15,
+                        "gradientMode": "none",
+                        "axisLabel": "Bytes",
+                        "drawStyle": "line",
+                        "pointSize": 5,
+                        "showPoints": "auto",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byRegexp",
+                            "options": "Total.*"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.lineStyle",
+                                "value": {
+                                    "fill": "dash",
+                                    "dash": [
+                                        10,
+                                        10
+                                    ]
+                                }
+                            },
+                            {
+                                "id": "custom.fillOpacity",
+                                "value": 0
+                            },
+                            {
+                                "id": "color",
+                                "value": {
+                                    "mode": "fixed",
+                                    "fixedColor": "#FF4040"
+                                }
+                            },
+                            {
+                                "id": "custom.lineWidth",
+                                "value": 3
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_filesystem_size_bytes{mountpoint=~\"/var.*\", fstype!~\"tmpfs|overlay\"} - node_filesystem_avail_bytes{mountpoint=~\"/var.*\", fstype!~\"tmpfs|overlay\"}",
+                    "legendFormat": "Used ({{instance}}:{{mountpoint}})"
                 },
                 {
                     "refId": "B",
@@ -510,277 +1023,15 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "count((kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Failed\"} == 1) and on(pod, namespace) kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"}) or vector(0)",
-                    "legendFormat": "Failed Pods"
-                },
-                {
-                    "refId": "C",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "count((kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Unknown\"} == 1) and on(pod, namespace) kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"}) or vector(0)",
-                    "legendFormat": "Unknown Phase"
+                    "expr": "node_filesystem_size_bytes{mountpoint=~\"/var.*\", fstype!~\"tmpfs|overlay\"}",
+                    "legendFormat": "Total ({{instance}}:{{mountpoint}})"
                 }
             ]
         },
         {
-            "type": "row",
-            "title": "Node Filesystem Overview \u2014 All Mount Points",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 27
-            },
-            "id": 6,
-            "panels": []
-        },
-        {
-            "id": 7,
-            "title": "Total Filesystem Size (all mounts)",
-            "description": "Sum of all filesystem sizes on selected node(s)",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 0,
-                "y": 28
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "bytes",
-                    "decimals": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#5794F2",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "mappings": []
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "value",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(node_filesystem_size_bytes{node=~\"$node\", fstype!~\"tmpfs|overlay\"})",
-                    "legendFormat": "Total",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 8,
-            "title": "Total Used (all mounts)",
-            "description": "Sum of used bytes across all filesystems on selected node(s)",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 6,
-                "y": 28
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "bytes",
-                    "decimals": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#FF9830",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "mappings": []
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "value",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(node_filesystem_size_bytes{node=~\"$node\", fstype!~\"tmpfs|overlay\"} - node_filesystem_avail_bytes{node=~\"$node\", fstype!~\"tmpfs|overlay\"})",
-                    "legendFormat": "Used",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 9,
-            "title": "Total Available (all mounts)",
-            "description": "Sum of available bytes across all filesystems",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 12,
-                "y": 28
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "bytes",
-                    "decimals": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#73BF69",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "mappings": []
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "value",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(node_filesystem_avail_bytes{node=~\"$node\", fstype!~\"tmpfs|overlay\"})",
-                    "legendFormat": "Available",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 10,
-            "title": "Overall Disk Utilization %",
-            "description": "Percentage of all non-tmpfs filesystem capacity that is used",
-            "type": "gauge",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 18,
-                "y": 28
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "percentunit",
-                    "decimals": 1,
-                    "min": 0,
-                    "max": 1,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#73BF69",
-                                "value": null
-                            },
-                            {
-                                "color": "#FF9830",
-                                "value": 0.75
-                            },
-                            {
-                                "color": "#FF4040",
-                                "value": 0.9
-                            }
-                        ]
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ]
-                },
-                "showThresholdLabels": true,
-                "showThresholdMarkers": true
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "1 - (sum(node_filesystem_avail_bytes{node=~\"$node\", fstype!~\"tmpfs|overlay\"}) / sum(node_filesystem_size_bytes{node=~\"$node\", fstype!~\"tmpfs|overlay\"}))",
-                    "legendFormat": "Used %",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 11,
-            "title": "All Filesystems \u2014 Size, Used, Available, Usage %",
-            "description": "Every filesystem on selected node(s) with device info, mount point, total size, used, available, and usage percentage.",
+            "id": 15,
+            "title": "All Filesystems \u2014 Current Status",
+            "description": "Every filesystem reported by node-exporter. Shows device, mount point, FS type, size, used, available, and usage %. Uses 'instance' label for node identity.",
             "type": "table",
             "datasource": {
                 "type": "prometheus",
@@ -790,7 +1041,7 @@
                 "h": 8,
                 "w": 24,
                 "x": 0,
-                "y": 32
+                "y": 67
             },
             "fieldConfig": {
                 "defaults": {
@@ -834,18 +1085,6 @@
                             {
                                 "id": "custom.width",
                                 "value": 200
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "FS Type"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.width",
-                                "value": 80
                             }
                         ]
                     },
@@ -935,14 +1174,13 @@
                             "Time": true,
                             "__name__": true,
                             "job": true,
-                            "instance": true,
                             "service": true,
                             "endpoint": true,
                             "prometheus": true,
                             "container": true
                         },
                         "renameByName": {
-                            "node": "Node",
+                            "instance": "Node",
                             "mountpoint": "Mount Point",
                             "device": "Device",
                             "fstype": "FS Type",
@@ -961,7 +1199,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "node_filesystem_size_bytes{node=~\"$node\"}",
+                    "expr": "node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs\"}",
                     "legendFormat": "",
                     "format": "table",
                     "instant": true
@@ -972,7 +1210,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "node_filesystem_size_bytes{node=~\"$node\"} - node_filesystem_avail_bytes{node=~\"$node\"}",
+                    "expr": "node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs\"} - node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs\"}",
                     "legendFormat": "",
                     "format": "table",
                     "instant": true
@@ -983,7 +1221,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "node_filesystem_avail_bytes{node=~\"$node\"}",
+                    "expr": "node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs\"}",
                     "legendFormat": "",
                     "format": "table",
                     "instant": true
@@ -994,7 +1232,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "1 - (node_filesystem_avail_bytes{node=~\"$node\"} / node_filesystem_size_bytes{node=~\"$node\"})",
+                    "expr": "1 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs\"})",
                     "legendFormat": "",
                     "format": "table",
                     "instant": true
@@ -1002,81 +1240,22 @@
             ]
         },
         {
-            "id": 12,
-            "title": "Filesystem Usage % Over Time \u2014 All Mount Points",
-            "description": "Each line is a mount point. Shows how full each filesystem is getting over time. Helps identify filesystems approaching capacity.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
+            "type": "row",
+            "title": "EmptyDir & Volume Usage Inside Pods",
+            "collapsed": false,
             "gridPos": {
-                "h": 10,
+                "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 40
+                "y": 75
             },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "percentunit",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Usage %",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": [
-                    {
-                        "matcher": {
-                            "id": "byRegexp",
-                            "options": ".*:/$|.*:/var.*"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.lineWidth",
-                                "value": 3
-                            }
-                        ]
-                    }
-                ]
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "1 - (node_filesystem_avail_bytes{node=~\"$node\"} / node_filesystem_size_bytes{node=~\"$node\"})",
-                    "legendFormat": "{{node}}:{{mountpoint}} ({{device}})"
-                }
-            ]
+            "id": 16,
+            "panels": []
         },
         {
-            "id": 13,
-            "title": "Filesystem Used Bytes Over Time \u2014 Per Mount Point",
-            "description": "Absolute bytes used on each filesystem over time. Each line = one mount point on the node.",
+            "id": 17,
+            "title": "Volume Usage Over Time (EmptyDir + PVC)",
+            "description": "kubelet_volume_stats_used_bytes tracks EmptyDir and PVC volumes mounted inside pods. EmptyDir volumes live on /var/lib/kubelet, consuming /var space.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1084,9 +1263,9 @@
             },
             "gridPos": {
                 "h": 10,
-                "w": 24,
+                "w": 12,
                 "x": 0,
-                "y": 50
+                "y": 76
             },
             "fieldConfig": {
                 "defaults": {
@@ -1127,259 +1306,25 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "node_filesystem_size_bytes{node=~\"$node\"} - node_filesystem_avail_bytes{node=~\"$node\"}",
-                    "legendFormat": "{{node}}:{{mountpoint}} ({{device}})"
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "/var Deep Dive \u2014 Ephemeral Storage & Container Layers",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 60
-            },
-            "id": 14,
-            "panels": []
-        },
-        {
-            "id": 15,
-            "title": "/var Usage %",
-            "description": "How full /var is right now. /var is the primary ephemeral storage mount in Kubernetes \u2014 contains container images, logs, and ephemeral volumes.",
-            "type": "gauge",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 5,
-                "w": 6,
-                "x": 0,
-                "y": 61
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "percentunit",
-                    "decimals": 1,
-                    "min": 0,
-                    "max": 1,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#73BF69",
-                                "value": null
-                            },
-                            {
-                                "color": "#FF9830",
-                                "value": 0.75
-                            },
-                            {
-                                "color": "#FF4040",
-                                "value": 0.9
-                            }
-                        ]
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ]
-                },
-                "showThresholdLabels": true,
-                "showThresholdMarkers": true
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "1 - (node_filesystem_avail_bytes{node=~\"$node\", mountpoint=~\"/var.*\"} / node_filesystem_size_bytes{node=~\"$node\", mountpoint=~\"/var.*\"})",
-                    "legendFormat": "{{mountpoint}}",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 16,
-            "title": "/var Capacity Breakdown",
-            "description": "Total size, used, and available on /var partitions",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 5,
-                "w": 6,
-                "x": 6,
-                "y": 61
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "bytes",
-                    "decimals": 2,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#73BF69",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "mappings": []
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "horizontal",
-                "textMode": "value_and_name",
-                "colorMode": "value",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "node_filesystem_size_bytes{node=~\"$node\", mountpoint=~\"/var.*\"}",
-                    "legendFormat": "Total ({{mountpoint}})",
-                    "instant": true
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "node_filesystem_size_bytes{node=~\"$node\", mountpoint=~\"/var.*\"} - node_filesystem_avail_bytes{node=~\"$node\", mountpoint=~\"/var.*\"}",
-                    "legendFormat": "Used ({{mountpoint}})",
-                    "instant": true
-                },
-                {
-                    "refId": "C",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "node_filesystem_avail_bytes{node=~\"$node\", mountpoint=~\"/var.*\"}",
-                    "legendFormat": "Available ({{mountpoint}})",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 17,
-            "title": "/var Consumers \u2014 Category Breakdown",
-            "description": "Key consumers of /var space: container filesystem layers (ephemeral), container logs, and kubelet volumes.",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 5,
-                "w": 12,
-                "x": 12,
-                "y": 61
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "bytes",
-                    "decimals": 2,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#73BF69",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "mappings": []
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "horizontal",
-                "textMode": "value_and_name",
-                "colorMode": "value",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(container_fs_usage_bytes{namespace=~\"$namespace\", node=~\"$node\"})",
-                    "legendFormat": "Container Ephemeral FS (all pods)",
-                    "instant": true
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(container_fs_usage_bytes{namespace=~\"$namespace\", node=~\"$node\", container!=\"\"})",
-                    "legendFormat": "Container Writable Layers",
-                    "instant": true
-                },
-                {
-                    "refId": "C",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(kubelet_volume_stats_used_bytes{node=~\"$node\"})",
-                    "legendFormat": "PVC/EmptyDir Volumes",
-                    "instant": true
+                    "expr": "kubelet_volume_stats_used_bytes{namespace=~\"$namespace\"}",
+                    "legendFormat": "{{namespace}}/{{persistentvolumeclaim}}"
                 }
             ]
         },
         {
             "id": 18,
-            "title": "/var Usage % Over Time",
-            "description": "How /var utilization changes over time. Watch for upward trends that could lead to node eviction.",
+            "title": "Volume Usage % (EmptyDir + PVC)",
+            "description": "How full each volume is. EmptyDir capacity = node ephemeral storage limit.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 8,
+                "h": 10,
                 "w": 12,
-                "x": 0,
-                "y": 66
+                "x": 12,
+                "y": 76
             },
             "fieldConfig": {
                 "defaults": {
@@ -1395,36 +1340,7 @@
                         "spanNulls": true
                     }
                 },
-                "overrides": [
-                    {
-                        "matcher": {
-                            "id": "byRegexp",
-                            "options": ".*"
-                        },
-                        "properties": [
-                            {
-                                "id": "thresholds",
-                                "value": {
-                                    "mode": "absolute",
-                                    "steps": [
-                                        {
-                                            "color": "#73BF69",
-                                            "value": null
-                                        },
-                                        {
-                                            "color": "#FF9830",
-                                            "value": 0.75
-                                        },
-                                        {
-                                            "color": "#FF4040",
-                                            "value": 0.9
-                                        }
-                                    ]
-                                }
-                            }
-                        ]
-                    }
-                ]
+                "overrides": []
             },
             "options": {
                 "legend": {
@@ -1449,289 +1365,15 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "1 - (node_filesystem_avail_bytes{node=~\"$node\", mountpoint=~\"/var.*\"} / node_filesystem_size_bytes{node=~\"$node\", mountpoint=~\"/var.*\"})",
-                    "legendFormat": "{{node}}:{{mountpoint}}"
+                    "expr": "kubelet_volume_stats_used_bytes{namespace=~\"$namespace\"} / kubelet_volume_stats_capacity_bytes{namespace=~\"$namespace\"}",
+                    "legendFormat": "{{namespace}}/{{persistentvolumeclaim}}"
                 }
             ]
         },
         {
             "id": 19,
-            "title": "/var Used Bytes Over Time",
-            "description": "Absolute bytes used on /var over time. Compare against total capacity.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 66
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "bytes",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Bytes",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": [
-                    {
-                        "matcher": {
-                            "id": "byRegexp",
-                            "options": "Total.*"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.lineStyle",
-                                "value": {
-                                    "fill": "dash",
-                                    "dash": [
-                                        10,
-                                        10
-                                    ]
-                                }
-                            },
-                            {
-                                "id": "custom.fillOpacity",
-                                "value": 0
-                            },
-                            {
-                                "id": "color",
-                                "value": {
-                                    "mode": "fixed",
-                                    "fixedColor": "#FF4040"
-                                }
-                            },
-                            {
-                                "id": "custom.lineWidth",
-                                "value": 3
-                            }
-                        ]
-                    }
-                ]
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "node_filesystem_size_bytes{node=~\"$node\", mountpoint=~\"/var.*\"} - node_filesystem_avail_bytes{node=~\"$node\", mountpoint=~\"/var.*\"}",
-                    "legendFormat": "Used ({{node}}:{{mountpoint}})"
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "node_filesystem_size_bytes{node=~\"$node\", mountpoint=~\"/var.*\"}",
-                    "legendFormat": "Total ({{node}}:{{mountpoint}})"
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "Per-Pod Ephemeral Storage Usage (Container FS on /var)",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 74
-            },
-            "id": 20,
-            "panels": []
-        },
-        {
-            "id": 21,
-            "title": "Per-Pod Ephemeral Storage Usage \u2014 Stacked",
-            "description": "Each color = a pod. Height = total ephemeral storage used by ALL pods. container_fs_usage_bytes measures the writable container layer, which lives on /var.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 10,
-                "w": 24,
-                "x": 0,
-                "y": 75
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "bytes",
-                    "custom": {
-                        "lineWidth": 0,
-                        "fillOpacity": 80,
-                        "gradientMode": "none",
-                        "axisLabel": "Ephemeral FS Used",
-                        "drawStyle": "bars",
-                        "pointSize": 5,
-                        "stacking": {
-                            "mode": "normal"
-                        },
-                        "showPoints": "never"
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum by (pod) (container_fs_usage_bytes{namespace=~\"$namespace\", node=~\"$node\", container!=\"\"})",
-                    "legendFormat": "{{pod}}"
-                }
-            ]
-        },
-        {
-            "id": 22,
-            "title": "Per-Pod Ephemeral Storage \u2014 Individual Lines",
-            "description": "Each line = one pod's ephemeral storage consumption. Compare against ephemeral limits to identify pods at risk of eviction.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 10,
-                "w": 24,
-                "x": 0,
-                "y": 85
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "bytes",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Bytes",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": [
-                    {
-                        "matcher": {
-                            "id": "byRegexp",
-                            "options": ".*Limit.*"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.lineStyle",
-                                "value": {
-                                    "fill": "dash",
-                                    "dash": [
-                                        6,
-                                        4
-                                    ]
-                                }
-                            },
-                            {
-                                "id": "custom.fillOpacity",
-                                "value": 0
-                            },
-                            {
-                                "id": "color",
-                                "value": {
-                                    "mode": "fixed",
-                                    "fixedColor": "#FF4040"
-                                }
-                            }
-                        ]
-                    }
-                ]
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum by (pod) (container_fs_usage_bytes{namespace=~\"$namespace\", node=~\"$node\", container!=\"\"})",
-                    "legendFormat": "{{pod}} Used"
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum by (pod) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=~\"ephemeral.storage\"})",
-                    "legendFormat": "{{pod}} Limit"
-                }
-            ]
-        },
-        {
-            "id": 23,
-            "title": "Top Pods by Ephemeral Storage Usage",
-            "description": "Pods ranked by current ephemeral filesystem usage. Shows usage, request, limit, and how much headroom remains before eviction risk.",
+            "title": "All Volumes \u2014 Capacity, Used, Available",
+            "description": "EmptyDir and PVC volumes tracked by kubelet. Shows capacity, used, available.",
             "type": "table",
             "datasource": {
                 "type": "prometheus",
@@ -1741,460 +1383,7 @@
                 "h": 8,
                 "w": 24,
                 "x": 0,
-                "y": 95
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "custom": {
-                        "align": "auto",
-                        "displayMode": "auto",
-                        "filterable": true
-                    }
-                },
-                "overrides": [
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "Pod"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.width",
-                                "value": 300
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "Namespace"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.width",
-                                "value": 140
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "Node"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.width",
-                                "value": 200
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byRegexp",
-                            "options": "Current Usage|Request|Limit"
-                        },
-                        "properties": [
-                            {
-                                "id": "unit",
-                                "value": "bytes"
-                            },
-                            {
-                                "id": "decimals",
-                                "value": 2
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "Current Usage"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.displayMode",
-                                "value": "lcd-gauge"
-                            },
-                            {
-                                "id": "thresholds",
-                                "value": {
-                                    "mode": "absolute",
-                                    "steps": [
-                                        {
-                                            "color": "#73BF69",
-                                            "value": null
-                                        },
-                                        {
-                                            "color": "#FF9830",
-                                            "value": 1073741824
-                                        },
-                                        {
-                                            "color": "#FF4040",
-                                            "value": 10737418240
-                                        }
-                                    ]
-                                }
-                            }
-                        ]
-                    }
-                ]
-            },
-            "options": {
-                "showHeader": true,
-                "sortBy": [
-                    {
-                        "displayName": "Current Usage",
-                        "desc": true
-                    }
-                ],
-                "footer": {
-                    "show": true,
-                    "reducer": [
-                        "sum"
-                    ],
-                    "fields": [
-                        "Current Usage",
-                        "Request",
-                        "Limit"
-                    ]
-                }
-            },
-            "transformations": [
-                {
-                    "id": "merge",
-                    "options": {}
-                },
-                {
-                    "id": "organize",
-                    "options": {
-                        "excludeByName": {
-                            "Time": true,
-                            "__name__": true
-                        },
-                        "renameByName": {
-                            "pod": "Pod",
-                            "namespace": "Namespace",
-                            "node": "Node",
-                            "Value #A": "Current Usage",
-                            "Value #B": "Request",
-                            "Value #C": "Limit"
-                        }
-                    }
-                }
-            ],
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum by (pod, namespace, node) (container_fs_usage_bytes{namespace=~\"$namespace\", node=~\"$node\", container!=\"\"})",
-                    "legendFormat": "",
-                    "format": "table",
-                    "instant": true
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=~\"ephemeral.storage\"})",
-                    "legendFormat": "",
-                    "format": "table",
-                    "instant": true
-                },
-                {
-                    "refId": "C",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=~\"ephemeral.storage\"})",
-                    "legendFormat": "",
-                    "format": "table",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "Container Layer & Log Analysis on /var",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 103
-            },
-            "id": 24,
-            "panels": []
-        },
-        {
-            "id": 25,
-            "title": "Container Writable Layer Usage \u2014 Stacked by Container",
-            "description": "Each container's writable overlay layer. This is the 'container layer' on /var that grows when containers write to the filesystem (not to a volume).",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 10,
-                "w": 12,
-                "x": 0,
-                "y": 104
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "bytes",
-                    "custom": {
-                        "lineWidth": 0,
-                        "fillOpacity": 80,
-                        "gradientMode": "none",
-                        "axisLabel": "Writable Layer",
-                        "drawStyle": "bars",
-                        "pointSize": 5,
-                        "stacking": {
-                            "mode": "normal"
-                        },
-                        "showPoints": "never"
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "container_fs_usage_bytes{namespace=~\"$namespace\", node=~\"$node\", container!=\"\", container!=\"POD\"}",
-                    "legendFormat": "{{pod}}/{{container}}"
-                }
-            ]
-        },
-        {
-            "id": 26,
-            "title": "Container Log Sizes Over Time",
-            "description": "Size of each container's log file tracked by kubelet. Large log files consume /var space. Uses kubelet_container_log_filesystem_used_bytes if available.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 10,
-                "w": 12,
-                "x": 12,
-                "y": 104
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "bytes",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Log Size",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "kubelet_container_log_filesystem_used_bytes{node=~\"$node\"}",
-                    "legendFormat": "{{pod}}/{{container}}"
-                }
-            ]
-        },
-        {
-            "id": 27,
-            "title": "Container Filesystem Write Rate",
-            "description": "Rate of bytes written by each container. High write rates on /var indicate containers that are actively growing their writable layer or ephemeral files.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 114
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "Bps",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Write Rate",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum by (pod, container) (rate(container_fs_writes_bytes_total{namespace=~\"$namespace\", node=~\"$node\", container!=\"\"}[5m]))",
-                    "legendFormat": "{{pod}}/{{container}}"
-                }
-            ]
-        },
-        {
-            "id": 28,
-            "title": "Container Filesystem Read Rate",
-            "description": "Rate of bytes read by each container from the filesystem.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 114
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "Bps",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Read Rate",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum by (pod, container) (rate(container_fs_reads_bytes_total{namespace=~\"$namespace\", node=~\"$node\", container!=\"\"}[5m]))",
-                    "legendFormat": "{{pod}}/{{container}}"
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "Volume Analysis \u2014 PVC & EmptyDir on /var",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 122
-            },
-            "id": 29,
-            "panels": []
-        },
-        {
-            "id": 30,
-            "title": "All Volumes \u2014 Capacity, Used, Available, Usage %",
-            "description": "PersistentVolumeClaims and EmptyDir volumes tracked by kubelet. These consume /var space when backed by the node's local filesystem.",
-            "type": "table",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 24,
-                "x": 0,
-                "y": 123
+                "y": 86
             },
             "fieldConfig": {
                 "defaults": {
@@ -2303,7 +1492,7 @@
                         "renameByName": {
                             "node": "Node",
                             "namespace": "Namespace",
-                            "persistentvolumeclaim": "PVC Name",
+                            "persistentvolumeclaim": "Volume Name",
                             "Value #A": "Capacity",
                             "Value #B": "Used",
                             "Value #C": "Available",
@@ -2319,7 +1508,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "kubelet_volume_stats_capacity_bytes{node=~\"$node\"}",
+                    "expr": "kubelet_volume_stats_capacity_bytes{namespace=~\"$namespace\"}",
                     "legendFormat": "",
                     "format": "table",
                     "instant": true
@@ -2330,7 +1519,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "kubelet_volume_stats_used_bytes{node=~\"$node\"}",
+                    "expr": "kubelet_volume_stats_used_bytes{namespace=~\"$namespace\"}",
                     "legendFormat": "",
                     "format": "table",
                     "instant": true
@@ -2341,7 +1530,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "kubelet_volume_stats_available_bytes{node=~\"$node\"}",
+                    "expr": "kubelet_volume_stats_available_bytes{namespace=~\"$namespace\"}",
                     "legendFormat": "",
                     "format": "table",
                     "instant": true
@@ -2352,7 +1541,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "kubelet_volume_stats_used_bytes{node=~\"$node\"} / kubelet_volume_stats_capacity_bytes{node=~\"$node\"}",
+                    "expr": "kubelet_volume_stats_used_bytes{namespace=~\"$namespace\"} / kubelet_volume_stats_capacity_bytes{namespace=~\"$namespace\"}",
                     "legendFormat": "",
                     "format": "table",
                     "instant": true
@@ -2360,9 +1549,22 @@
             ]
         },
         {
-            "id": 31,
-            "title": "Volume Usage Over Time",
-            "description": "How volume usage changes over time. Each line = one PVC or EmptyDir.",
+            "type": "row",
+            "title": "Container Filesystem I/O Rates",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 94
+            },
+            "id": 20,
+            "panels": []
+        },
+        {
+            "id": 21,
+            "title": "Container Write Rate (to ephemeral storage)",
+            "description": "Bytes/sec written by each container. High rates = actively filling /var.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -2370,18 +1572,18 @@
             },
             "gridPos": {
                 "h": 8,
-                "w": 24,
+                "w": 12,
                 "x": 0,
-                "y": 131
+                "y": 95
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "bytes",
+                    "unit": "Bps",
                     "custom": {
                         "lineWidth": 2,
                         "fillOpacity": 15,
                         "gradientMode": "none",
-                        "axisLabel": "Used",
+                        "axisLabel": "Write Rate",
                         "drawStyle": "line",
                         "pointSize": 5,
                         "showPoints": "auto",
@@ -2413,8 +1615,67 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "kubelet_volume_stats_used_bytes{node=~\"$node\"}",
-                    "legendFormat": "{{namespace}}/{{persistentvolumeclaim}}"
+                    "expr": "sum by (pod) (rate(container_fs_writes_bytes_total{namespace=~\"$namespace\", container!=\"\"}[5m]))",
+                    "legendFormat": "{{pod}}"
+                }
+            ]
+        },
+        {
+            "id": 22,
+            "title": "Container Read Rate (from ephemeral storage)",
+            "description": "Bytes/sec read by each container from its filesystem.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 95
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "Bps",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 15,
+                        "gradientMode": "none",
+                        "axisLabel": "Read Rate",
+                        "drawStyle": "line",
+                        "pointSize": 5,
+                        "showPoints": "auto",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum by (pod) (rate(container_fs_reads_bytes_total{namespace=~\"$namespace\", container!=\"\"}[5m]))",
+                    "legendFormat": "{{pod}}"
                 }
             ]
         }
