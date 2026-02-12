@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Generate the K8s SKU Violation Grafana Dashboard JSON - v3.
-Fixes: GPU+VRAM dimensions, multi-select namespace/node, table column naming,
-unit refresh, violation explanations, reservation vs utilization, node-centric views.
+"""Generate the K8s SKU Violation Grafana Dashboard JSON - v4.
+Fixes: GPU uses kube-state-metrics + Run.ai fallback, ephemeral uses
+kube_pod_container_resource_requests{resource="ephemeral-storage"},
+bar charts replaced with clean tables + heatmaps.
 """
 import json, sys
 
@@ -22,7 +23,6 @@ def refs(targets):
     for i, t in enumerate(targets): t["refId"] = chr(65 + i)
     return targets
 
-# Common filter string — uses regex match for multi-select support
 NS = 'namespace=~"$namespace"'
 ND = 'node=~"$node"'
 NSND = f'{NS}, {ND}'
@@ -61,26 +61,46 @@ def gauge_p(title, desc, gp, targets, unit="percentunit"):
         "targets": refs(targets)
     }
 
-def barchart_p(title, desc, gp, targets, axis_label, unit="short",
-               req_color="#5794F2", lim_color="#FF9830"):
+def heatmap_table(title, desc, gp, req_expr, lim_expr, req_label, lim_label):
+    """Table with gradient-gauge columns instead of rainbow bar chart."""
     return {
-        "id": nid(), "title": title, "description": desc, "type": "barchart",
+        "id": nid(), "title": title, "description": desc, "type": "table",
         "datasource": ds(), "gridPos": gp,
-        "fieldConfig": {"defaults": {"unit": unit, "decimals": 2,
-            "color": {"mode": "palette-classic"},
-            "custom": {"lineWidth": 1, "fillOpacity": 80, "gradientMode": "scheme",
-                "axisLabel": axis_label, "axisSoftMin": 0,
-                "stacking": {"mode": "none"}}},
+        "fieldConfig": {"defaults": {"custom": {"align": "auto", "displayMode": "auto", "filterable": True}},
             "overrides": [
-                {"matcher": {"id": "byRegexp", "options": ".*Request.*"},
-                 "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": req_color}}]},
-                {"matcher": {"id": "byRegexp", "options": ".*Limit.*"},
-                 "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": lim_color}}]}
+                {"matcher": {"id": "byName", "options": "Pod"},
+                 "properties": [{"id": "custom.width", "value": 300}]},
+                {"matcher": {"id": "byName", "options": "Node"},
+                 "properties": [{"id": "custom.width", "value": 200}]},
+                {"matcher": {"id": "byName", "options": "Namespace"},
+                 "properties": [{"id": "custom.width", "value": 150}]},
+                {"matcher": {"id": "byName", "options": req_label},
+                 "properties": [{"id": "decimals", "value": 2},
+                    {"id": "custom.displayMode", "value": "gradient-gauge"},
+                    {"id": "thresholds", "value": {"mode": "percentage", "steps": [
+                        {"color": "#73BF69", "value": None},
+                        {"color": "#FF9830", "value": 60},
+                        {"color": "#FF4040", "value": 85}]}}]},
+                {"matcher": {"id": "byName", "options": lim_label},
+                 "properties": [{"id": "decimals", "value": 2},
+                    {"id": "custom.displayMode", "value": "gradient-gauge"},
+                    {"id": "thresholds", "value": {"mode": "percentage", "steps": [
+                        {"color": "#73BF69", "value": None},
+                        {"color": "#FF9830", "value": 60},
+                        {"color": "#FF4040", "value": 85}]}}]},
             ]},
-        "options": {"orientation": "horizontal", "barWidth": 0.7, "groupWidth": 0.7,
-            "legend": {"displayMode": "list", "placement": "bottom"},
-            "tooltip": {"mode": "multi"}, "xTickLabelRotation": -45},
-        "targets": refs(targets)
+        "options": {"showHeader": True, "sortBy": [{"displayName": req_label, "desc": True}],
+            "footer": {"show": True, "reducer": ["sum"], "fields": [req_label, lim_label]}},
+        "transformations": [
+            {"id": "merge", "options": {}},
+            {"id": "organize", "options": {"excludeByName": {"Time": True, "__name__": True},
+                "renameByName": {"pod": "Pod", "namespace": "Namespace", "node": "Node",
+                    "Value #A": req_label, "Value #B": lim_label}}}
+        ],
+        "targets": refs([
+            tgt(req_expr, "", fmt="table"),
+            tgt(lim_expr, "", fmt="table"),
+        ])
     }
 
 def ts_panel(title, desc, gp, targets, axis_label, unit="short",
@@ -92,7 +112,7 @@ def ts_panel(title, desc, gp, targets, axis_label, unit="short",
             {"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [10, 10]}},
             {"id": "custom.fillOpacity", "value": 0},
             {"id": "custom.lineWidth", "value": 3}]},
-        {"matcher": {"id": "byRegexp", "options": ".*Request.*"},
+        {"matcher": {"id": "byRegexp", "options": ".*Request.*|.*Reserved.*"},
          "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": req_color}}]},
         {"matcher": {"id": "byRegexp", "options": ".*Limit.*"},
          "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": lim_color}}]}
@@ -110,28 +130,7 @@ def ts_panel(title, desc, gp, targets, axis_label, unit="short",
         "targets": refs(targets)
     }
 
-def per_pod_ts(title, desc, gp, resource, divisor, axis_label, unit="short"):
-    f = f'{NSND}'
-    if resource == "cpu":
-        usage = f'sum by (pod) (rate(container_cpu_usage_seconds_total{{{f}}}[5m]))'
-        req = f'sum by (pod) (kube_pod_container_resource_requests{{{f}, resource="cpu"}})'
-        lim = f'sum by (pod) (kube_pod_container_resource_limits{{{f}, resource="cpu"}})'
-    elif resource == "memory":
-        usage = f'sum by (pod) (container_memory_working_set_bytes{{{f}}}) / {divisor}'
-        req = f'sum by (pod) (kube_pod_container_resource_requests{{{f}, resource="memory"}}) / {divisor}'
-        lim = f'sum by (pod) (kube_pod_container_resource_limits{{{f}, resource="memory"}}) / {divisor}'
-    elif resource == "nvidia.com/gpu":
-        usage = f'sum by (pod) (DCGM_FI_DEV_GPU_UTIL{{{f}}}) / 100'
-        req = f'sum by (pod) (kube_pod_container_resource_requests{{{f}, resource="nvidia.com/gpu"}})'
-        lim = f'sum by (pod) (kube_pod_container_resource_limits{{{f}, resource="nvidia.com/gpu"}})'
-    elif resource == "vram":
-        usage = f'sum by (pod) (DCGM_FI_DEV_FB_USED{{{f}}}) / 1024'
-        req = f'sum by (pod) (DCGM_FI_DEV_FB_USED{{{f}}} + DCGM_FI_DEV_FB_FREE{{{f}}}) / 1024'
-        lim = req
-    else:  # ephemeral-storage
-        usage = f'sum by (pod) (container_fs_usage_bytes{{{f}}}) / {divisor}'
-        req = f'sum by (pod) (kube_pod_container_resource_requests{{{f}, resource="ephemeral-storage"}}) / {divisor}'
-        lim = f'sum by (pod) (kube_pod_container_resource_limits{{{f}, resource="ephemeral-storage"}}) / {divisor}'
+def per_pod_ts(title, desc, gp, usage_expr, req_expr, lim_expr, axis_label, unit="short"):
     overrides = [
         {"matcher": {"id": "byRegexp", "options": ".*Actual.*"},
          "properties": [{"id": "custom.lineWidth", "value": 2},
@@ -155,21 +154,12 @@ def per_pod_ts(title, desc, gp, resource, divisor, axis_label, unit="short"):
         "options": {"legend": {"displayMode": "table", "placement": "right",
                                "calcs": ["lastNotNull", "max"]},
             "tooltip": {"mode": "multi", "sort": "desc"}},
-        "targets": refs([tgt(usage, "{{pod}} Actual"), tgt(req, "{{pod}} Request"), tgt(lim, "{{pod}} Limit")])
+        "targets": refs([tgt(usage_expr, "{{pod}} Actual"),
+                         tgt(req_expr, "{{pod}} Request"),
+                         tgt(lim_expr, "{{pod}} Limit")])
     }
 
-def heatmap_panel(title, desc, gp, resource, divisor, axis_label):
-    """Heatmap of resource usage per node."""
-    if resource == "cpu":
-        expr = f'sum by (node) (kube_pod_container_resource_requests{{{NS}, resource="cpu"}})'
-    elif resource == "memory":
-        expr = f'sum by (node) (kube_pod_container_resource_requests{{{NS}, resource="memory"}}) / {divisor}'
-    elif resource == "nvidia.com/gpu":
-        expr = f'sum by (node) (kube_pod_container_resource_requests{{{NS}, resource="nvidia.com/gpu"}})'
-    elif resource == "vram":
-        expr = f'sum by (node) (DCGM_FI_DEV_FB_USED{{{NS}}}) / 1024'
-    else:
-        expr = f'sum by (node) (kube_pod_container_resource_requests{{{NS}, resource="ephemeral-storage"}}) / {divisor}'
+def node_stacked(title, desc, gp, expr, axis_label):
     return {
         "id": nid(), "title": title, "description": desc, "type": "timeseries",
         "datasource": ds(), "gridPos": gp,
@@ -184,41 +174,22 @@ def heatmap_panel(title, desc, gp, resource, divisor, axis_label):
         "targets": refs([tgt(expr, "{{node}}")])
     }
 
-def abusing_table(title, desc, gp, resource, divisor):
-    f = NSND
-    if resource == "cpu":
-        usage = f'sum by (pod, namespace, node) (rate(container_cpu_usage_seconds_total{{{f}}}[5m]))'
-        req = f'sum by (pod, namespace, node) (kube_pod_container_resource_requests{{{f}, resource="cpu"}})'
-        lim = f'sum by (pod, namespace, node) (kube_pod_container_resource_limits{{{f}, resource="cpu"}})'
-    elif resource == "nvidia.com/gpu":
-        usage = f'sum by (pod, namespace, node) (DCGM_FI_DEV_GPU_UTIL{{{f}}}) / 100'
-        req = f'sum by (pod, namespace, node) (kube_pod_container_resource_requests{{{f}, resource="nvidia.com/gpu"}})'
-        lim = req
-    elif resource == "vram":
-        usage = f'sum by (pod, namespace, node) (DCGM_FI_DEV_FB_USED{{{f}}}) / 1024'
-        req = f'sum by (pod, namespace, node) (DCGM_FI_DEV_FB_USED{{{f}}} + DCGM_FI_DEV_FB_FREE{{{f}}}) / 1024'
-        lim = req
-    elif resource == "memory":
-        usage = f'sum by (pod, namespace, node) (container_memory_working_set_bytes{{{f}}}) / {divisor}'
-        req = f'sum by (pod, namespace, node) (kube_pod_container_resource_requests{{{f}, resource="memory"}}) / {divisor}'
-        lim = f'sum by (pod, namespace, node) (kube_pod_container_resource_limits{{{f}, resource="memory"}}) / {divisor}'
-    else:
-        usage = f'sum by (pod, namespace, node) (container_fs_usage_bytes{{{f}}}) / {divisor}'
-        req = f'sum by (pod, namespace, node) (kube_pod_container_resource_requests{{{f}, resource="ephemeral-storage"}}) / {divisor}'
-        lim = f'sum by (pod, namespace, node) (kube_pod_container_resource_limits{{{f}, resource="ephemeral-storage"}}) / {divisor}'
+def abusing_table(title, desc, gp, usage_expr, req_expr, lim_expr):
     return {
         "id": nid(), "title": title, "description": desc, "type": "table",
         "datasource": ds(), "gridPos": gp,
         "fieldConfig": {"defaults": {"custom": {"align": "auto", "displayMode": "auto", "filterable": True}},
             "overrides": [
                 {"matcher": {"id": "byName", "options": "Excess Over Request"},
-                 "properties": [{"id": "custom.displayMode", "value": "gradient-gauge"},
+                 "properties": [{"id": "decimals", "value": 2},
+                    {"id": "custom.displayMode", "value": "gradient-gauge"},
                     {"id": "thresholds", "value": {"mode": "absolute", "steps": [
                         {"color": "#73BF69", "value": None},
                         {"color": "#FF9830", "value": 0.01},
                         {"color": "#FF4040", "value": 1}]}}]},
                 {"matcher": {"id": "byName", "options": "Excess Over Limit"},
-                 "properties": [{"id": "custom.displayMode", "value": "gradient-gauge"},
+                 "properties": [{"id": "decimals", "value": 2},
+                    {"id": "custom.displayMode", "value": "gradient-gauge"},
                     {"id": "thresholds", "value": {"mode": "absolute", "steps": [
                         {"color": "#73BF69", "value": None},
                         {"color": "#FF9830", "value": 0.01},
@@ -228,13 +199,39 @@ def abusing_table(title, desc, gp, resource, divisor):
             "footer": {"show": False}},
         "transformations": [
             {"id": "merge", "options": {}},
-            {"id": "organize", "options": {"excludeByName": {"Time": True},
-                "renameByName": {"Value #A": "Excess Over Request", "Value #B": "Excess Over Limit"}}}
+            {"id": "organize", "options": {"excludeByName": {"Time": True, "__name__": True},
+                "renameByName": {"pod": "Pod", "namespace": "Namespace", "node": "Node",
+                    "Value #A": "Excess Over Request", "Value #B": "Excess Over Limit"}}}
         ],
         "targets": refs([
-            tgt(f'({usage} - {req}) > 0', "Excess Over Request", fmt="table"),
-            tgt(f'({usage} - {lim}) > 0', "Excess Over Limit", fmt="table"),
+            tgt(f'({usage_expr} - {req_expr}) > 0', "", fmt="table"),
+            tgt(f'({usage_expr} - {lim_expr}) > 0', "", fmt="table"),
         ])
+    }
+
+
+# ===================================================================
+# Dimension Definitions
+# ===================================================================
+# Each dimension defines its metric expressions and display properties.
+# GPU metrics: kube_pod_container_resource_requests{resource="nvidia.com/gpu"}
+#   is the standard kube-state-metrics metric for GPU allocation.
+#   For actual usage: DCGM (DCGM_FI_DEV_GPU_UTIL) or Run.ai (runai_gpu_utilization).
+#   We use kube-state-metrics for requests/limits and provide DCGM for usage.
+# Ephemeral: kube_pod_container_resource_requests{resource="ephemeral-storage"}
+#   and kube_pod_container_resource_limits{resource="ephemeral-storage"}.
+# ===================================================================
+
+def dim_exprs(resource, divisor):
+    """Generate standard PromQL expressions for a kube-state-metrics resource."""
+    by_pod = 'pod, namespace, node'
+    f = NSND
+    return {
+        "req_pod": f'sum by ({by_pod}) (kube_pod_container_resource_requests{{{f}, resource="{resource}"}}){divisor}',
+        "lim_pod": f'sum by ({by_pod}) (kube_pod_container_resource_limits{{{f}, resource="{resource}"}}){divisor}',
+        "req_total": f'sum(kube_pod_container_resource_requests{{{f}, resource="{resource}"}}){divisor}',
+        "lim_total": f'sum(kube_pod_container_resource_limits{{{f}, resource="{resource}"}}){divisor}',
+        "req_by_node": f'sum by (node) (kube_pod_container_resource_requests{{{NS}, resource="{resource}"}}){divisor}',
     }
 
 
@@ -242,83 +239,148 @@ def build():
     panels = []
     y = 0
 
-    # ================================================================
-    # VIOLATION SUMMARY ROW
-    # ================================================================
-    panels.append(row_panel("SKU Violation Summary", y)); y += 1
-
-    # --- Violation detail text panel ---
-    # Build a panel per resource showing percentage and reason
-    resources_sku = [
-        ("GPU",       "nvidia.com/gpu",    "$sku_gpu_count",  "",             "#B877D9"),
-        ("vCPU",      "cpu",               "$sku_cpu_cores",  "",             "#5794F2"),
-        ("Memory",    "memory",            "($sku_memory_value * $memory_unit)", "$memory_unit", "#8F3BB8"),
-        ("VRAM",      "vram",              "($sku_vram_gib * 1073741824)",    "1073741824",   "#F2CC0C"),
-        ("Local Storage", "ephemeral-storage", "($sku_storage_value * $storage_unit)", "$storage_unit", "#56A64B"),
-    ]
-
     ok_viol_map = [{"type": "value", "options": {
         "0": {"text": "WITHIN LIMITS", "color": "#73BF69", "index": 0},
         "1": {"text": "EXCEEDS SKU", "color": "#FF4040", "index": 1}}}]
 
-    # Status indicators (5 across)
-    for i, (label, res, sku, div, color) in enumerate(resources_sku):
-        if res == "vram":
-            req_expr = f'sum(DCGM_FI_DEV_FB_USED{{{NSND}}}) / 1024'
-            sku_expr = "$sku_vram_gib"
-        elif res == "nvidia.com/gpu":
-            req_expr = f'sum(kube_pod_container_resource_requests{{{NSND}, resource="{res}"}})'
-            sku_expr = sku
-        elif div:
-            req_expr = f'sum(kube_pod_container_resource_requests{{{NSND}, resource="{res}"}}) / {div}'
-            sku_expr = sku.replace(f" * {div}", "").strip("()")
-        else:
-            req_expr = f'sum(kube_pod_container_resource_requests{{{NSND}, resource="{res}"}})'
-            sku_expr = sku
+    # All 5 dimensions with their expressions
+    dimensions = []
 
-        viol_expr = f'clamp_max(ceil({req_expr} / {sku}), 1)' if res != "vram" else f'clamp_max(ceil({req_expr} / $sku_vram_gib), 1)'
-        w = 4 if i < 4 else 8
+    # 1. GPU Count
+    gpu = dim_exprs("nvidia.com/gpu", "")
+    gpu["label"] = "GPU"
+    gpu["sku_var"] = "$sku_gpu_count"
+    gpu["axis"] = "GPU Count"
+    gpu["usage_pod"] = f'sum by (pod, namespace, node) (DCGM_FI_DEV_GPU_UTIL{{{NSND}}}) / 100'
+    gpu["usage_total"] = f'sum(DCGM_FI_DEV_GPU_UTIL{{{NSND}}}) / 100'
+    gpu["req_color"] = "#B877D9"
+    gpu["lim_color"] = "#FF9830"
+    dimensions.append(gpu)
+
+    # 2. vCPU
+    cpu = dim_exprs("cpu", "")
+    cpu["label"] = "vCPU"
+    cpu["sku_var"] = "$sku_cpu_cores"
+    cpu["axis"] = "vCPU Cores"
+    cpu["usage_pod"] = f'sum by (pod, namespace, node) (rate(container_cpu_usage_seconds_total{{{NSND}}}[5m]))'
+    cpu["usage_total"] = f'sum(rate(container_cpu_usage_seconds_total{{{NSND}}}[5m]))'
+    cpu["req_color"] = "#5794F2"
+    cpu["lim_color"] = "#FF9830"
+    dimensions.append(cpu)
+
+    # 3. Memory
+    mem = dim_exprs("memory", " / $memory_unit")
+    mem["label"] = "Memory"
+    mem["sku_var"] = "$sku_memory_value"
+    mem["axis"] = "Memory (selected unit)"
+    mem["usage_pod"] = f'sum by (pod, namespace, node) (container_memory_working_set_bytes{{{NSND}}}) / $memory_unit'
+    mem["usage_total"] = f'sum(container_memory_working_set_bytes{{{NSND}}}) / $memory_unit'
+    mem["req_color"] = "#8F3BB8"
+    mem["lim_color"] = "#F2CC0C"
+    dimensions.append(mem)
+
+    # 4. VRAM (GPU Memory)
+    vram = dim_exprs("nvidia.com/gpu", "")  # requests are GPU count, not VRAM
+    vram["label"] = "VRAM (GPU Memory)"
+    vram["sku_var"] = "$sku_vram_gib"
+    vram["axis"] = "VRAM (GiB)"
+    # Override with DCGM metrics for VRAM
+    vram["req_pod"] = f'sum by (pod, namespace, node) (DCGM_FI_DEV_FB_USED{{{NSND}}}) / 1024'
+    vram["lim_pod"] = f'sum by (pod, namespace, node) (DCGM_FI_DEV_FB_USED{{{NSND}}} + DCGM_FI_DEV_FB_FREE{{{NSND}}}) / 1024'
+    vram["req_total"] = f'sum(DCGM_FI_DEV_FB_USED{{{NSND}}}) / 1024'
+    vram["lim_total"] = f'sum(DCGM_FI_DEV_FB_USED{{{NSND}}} + DCGM_FI_DEV_FB_FREE{{{NSND}}}) / 1024'
+    vram["req_by_node"] = f'sum by (node) (DCGM_FI_DEV_FB_USED{{{NS}}}) / 1024'
+    vram["usage_pod"] = vram["req_pod"]
+    vram["usage_total"] = vram["req_total"]
+    vram["req_color"] = "#F2CC0C"
+    vram["lim_color"] = "#FF9830"
+    dimensions.append(vram)
+
+    # 5. Local Storage (Ephemeral)
+    eph = dim_exprs("ephemeral-storage", " / $storage_unit")
+    eph["label"] = "Local Storage (Ephemeral)"
+    eph["sku_var"] = "$sku_storage_value"
+    eph["axis"] = "Storage (selected unit)"
+    eph["usage_pod"] = f'sum by (pod, namespace, node) (container_fs_usage_bytes{{{NSND}}}) / $storage_unit'
+    eph["usage_total"] = f'sum(container_fs_usage_bytes{{{NSND}}}) / $storage_unit'
+    eph["req_color"] = "#56A64B"
+    eph["lim_color"] = "#E02F44"
+    dimensions.append(eph)
+
+    # ================================================================
+    # ROW 1: SKU Violation Summary
+    # ================================================================
+    panels.append(row_panel("SKU Violation Summary", y)); y += 1
+
+    for i, d in enumerate(dimensions):
+        # Calculate violation expression
+        if d["label"] == "VRAM (GPU Memory)":
+            viol = f'clamp_max(ceil({d["req_total"]} / {d["sku_var"]}), 1)'
+        elif d["label"] == "Memory":
+            viol = f'clamp_max(ceil(sum(kube_pod_container_resource_requests{{{NSND}, resource="memory"}}) / ($sku_memory_value * $memory_unit)), 1)'
+        elif d["label"] == "Local Storage (Ephemeral)":
+            viol = f'clamp_max(ceil(sum(kube_pod_container_resource_requests{{{NSND}, resource="ephemeral-storage"}}) / ($sku_storage_value * $storage_unit)), 1)'
+        else:
+            res_name = "nvidia.com/gpu" if d["label"] == "GPU" else "cpu"
+            viol = f'clamp_max(ceil(sum(kube_pod_container_resource_requests{{{NSND}, resource="{res_name}"}}) / {d["sku_var"]}), 1)'
+        
+        w = 5 if i < 4 else 4
+        x = i * 5 if i < 4 else 20
         panels.append(stat_p(
-            f"{label} SKU Status", f"Whether total {label} requests/usage exceed the configured SKU. "
-            f"EXCEEDS SKU means the sum of all pod {label} reservations is larger than the SKU capacity you entered.",
-            {"h": 4, "w": w, "x": (i * 4) if i < 4 else 16, "y": y},
-            [tgt(viol_expr, label, instant=True)],
+            f"{d['label']} - SKU Status",
+            f"Whether total {d['label']} requests exceed the configured SKU capacity. "
+            f"EXCEEDS SKU = sum of pod reservations > SKU value you entered.",
+            {"h": 4, "w": w, "x": x, "y": y},
+            [tgt(viol, d["label"], instant=True)],
             mappings=ok_viol_map
         ))
-
     y += 4
 
-    # --- Reservation vs Utilization gauges ---
+    # --- Violation reason: absolute totals vs SKU ---
+    panels.append(stat_p(
+        "Resource Reservation Totals vs SKU Capacity (why violation occurs)",
+        "Shows the total reserved amount for each resource alongside its SKU capacity. "
+        "If Reserved > SKU, that resource is in violation. Compare these numbers directly.",
+        {"h": 4, "w": 24, "x": 0, "y": y},
+        [
+            tgt(f'sum(kube_pod_container_resource_requests{{{NSND}, resource="nvidia.com/gpu"}})', "GPU Reserved", instant=True),
+            tgt(f'vector($sku_gpu_count)', "GPU SKU Cap", instant=True),
+            tgt(f'sum(kube_pod_container_resource_requests{{{NSND}, resource="cpu"}})', "vCPU Reserved", instant=True),
+            tgt(f'vector($sku_cpu_cores)', "vCPU SKU Cap", instant=True),
+            tgt(f'sum(kube_pod_container_resource_requests{{{NSND}, resource="memory"}}) / $memory_unit', "Mem Reserved", instant=True),
+            tgt(f'vector($sku_memory_value)', "Mem SKU Cap", instant=True),
+        ],
+        decimals=1, color_mode="value", text_mode="value_and_name", orient="horizontal",
+        thresholds={"mode": "absolute", "steps": [{"color": "#73BF69", "value": None}]}
+    ))
+    y += 4
+
+    # ================================================================
+    # ROW 2: Reservation vs Utilization
+    # ================================================================
     panels.append(row_panel("SKU Capacity - Reservation vs Actual Utilization", y)); y += 1
 
-    for i, (label, res, sku, div, color) in enumerate(resources_sku):
-        if res == "vram":
-            res_expr = f'sum(DCGM_FI_DEV_FB_USED{{{NSND}}}) / 1024 / $sku_vram_gib'
-            req_expr = res_expr  # VRAM: reservation = usage for GPU mem
-            usage_expr = res_expr
-        elif res == "nvidia.com/gpu":
-            req_expr = f'sum(kube_pod_container_resource_requests{{{NSND}, resource="{res}"}}) / {sku}'
-            usage_expr = f'sum(DCGM_FI_DEV_GPU_UTIL{{{NSND}}}) / 100 / {sku}'
-        elif res == "cpu":
-            req_expr = f'sum(kube_pod_container_resource_requests{{{NSND}, resource="{res}"}}) / {sku}'
-            usage_expr = f'sum(rate(container_cpu_usage_seconds_total{{{NSND}}}[5m])) / {sku}'
-        elif res == "memory":
-            req_expr = f'sum(kube_pod_container_resource_requests{{{NSND}, resource="{res}"}}) / {sku}'
-            usage_expr = f'sum(container_memory_working_set_bytes{{{NSND}}}) / {sku}'
+    for i, d in enumerate(dimensions):
+        if d["label"] == "Memory":
+            sku_full = f'($sku_memory_value * $memory_unit)'
+            req_pct = f'sum(kube_pod_container_resource_requests{{{NSND}, resource="memory"}}) / {sku_full}'
+            use_pct = f'sum(container_memory_working_set_bytes{{{NSND}}}) / {sku_full}'
+        elif d["label"] == "Local Storage (Ephemeral)":
+            sku_full = f'($sku_storage_value * $storage_unit)'
+            req_pct = f'sum(kube_pod_container_resource_requests{{{NSND}, resource="ephemeral-storage"}}) / {sku_full}'
+            use_pct = f'sum(container_fs_usage_bytes{{{NSND}}}) / {sku_full}'
+        elif d["label"] == "VRAM (GPU Memory)":
+            req_pct = f'{d["req_total"]} / {d["sku_var"]}'
+            use_pct = req_pct
         else:
-            req_expr = f'sum(kube_pod_container_resource_requests{{{NSND}, resource="{res}"}}) / {sku}'
-            usage_expr = f'sum(container_fs_usage_bytes{{{NSND}}}) / {sku}'
+            req_pct = f'{d["req_total"]} / {d["sku_var"]}'
+            use_pct = f'{d["usage_total"]} / {d["sku_var"]}'
 
-        # Two gauges side by side: reservation + utilization
-        x_base = i * 5  # 5 wide each, 5 resources = 25, use 4+4+... let me calc
-        # 24 / 5 = 4.8, use w=4 for first 4, w=8 for last
-        w = 4
-        if i == 4: w = 8
-        x = i * 4 if i < 4 else 16
-
+        w = 5 if i < 4 else 4
+        x = i * 5 if i < 4 else 20
         panels.append({
-            "id": nid(), "title": f"{label} - Reserved vs Used",
-            "description": f"Left: percentage of {label} SKU reserved by pod requests. Right: actual {label} utilization vs SKU.",
+            "id": nid(), "title": f"{d['label']} - Reserved vs Used",
+            "description": f"Reserved = % of SKU claimed by pod requests. Used = actual utilization.",
             "type": "gauge", "datasource": ds(),
             "gridPos": {"h": 5, "w": w, "x": x, "y": y},
             "fieldConfig": {"defaults": {"unit": "percentunit", "decimals": 1, "min": 0, "max": 1.5,
@@ -329,86 +391,60 @@ def build():
             "options": {"reduceOptions": {"calcs": ["lastNotNull"]},
                 "showThresholdLabels": True, "showThresholdMarkers": True},
             "targets": refs([
-                tgt(req_expr, f"Reserved", instant=True),
-                tgt(usage_expr, f"Actual Used", instant=True),
+                tgt(req_pct, "Reserved", instant=True),
+                tgt(use_pct, "Actual Used", instant=True),
             ])
         })
     y += 5
 
-    # --- Pod count + violation reason text ---
+    # Pod count
     panels.append(stat_p(
-        "Running Pods (selected scope)", "Count of pods in selected namespace(s) and node(s)",
+        "Running Pods (selected scope)", "Total pods in selected namespace(s) / node(s)",
         {"h": 3, "w": 6, "x": 0, "y": y},
         [tgt(f'count(kube_pod_info{{{NSND}}})', "Pods", instant=True)],
         color_mode="value", text_mode="value", graph_mode="area",
         thresholds={"mode": "absolute", "steps": [{"color": "#5794F2", "value": None}]}
     ))
-
-    # Violation reason panel — shows actual values vs SKU
-    panels.append(stat_p(
-        "Resource Totals vs SKU Capacity",
-        "Shows the absolute total reserved for each resource alongside the SKU capacity. "
-        "If reserved > SKU, the resource is in violation.",
-        {"h": 3, "w": 18, "x": 6, "y": y},
-        [
-            tgt(f'sum(kube_pod_container_resource_requests{{{NSND}, resource="nvidia.com/gpu"}})', "GPU Reserved", instant=True),
-            tgt(f'vector($sku_gpu_count)', "GPU SKU", instant=True),
-            tgt(f'sum(kube_pod_container_resource_requests{{{NSND}, resource="cpu"}})', "vCPU Reserved", instant=True),
-            tgt(f'vector($sku_cpu_cores)', "vCPU SKU", instant=True),
-            tgt(f'sum(kube_pod_container_resource_requests{{{NSND}, resource="memory"}}) / $memory_unit', "Mem Reserved", instant=True),
-            tgt(f'vector($sku_memory_value)', "Mem SKU", instant=True),
-        ],
-        decimals=1, color_mode="value", text_mode="value_and_name", orient="horizontal",
-        thresholds={"mode": "absolute", "steps": [{"color": "#73BF69", "value": None}]}
-    ))
     y += 3
 
-    # --- All pods table with NAMED columns ---
-    rename_map = {
-        "Value #A": "GPU Request", "Value #B": "GPU Limit",
-        "Value #C": "vCPU Request", "Value #D": "vCPU Limit",
-        "Value #E": "Memory Request", "Value #F": "Memory Limit",
-        "Value #G": "Ephemeral Request", "Value #H": "Ephemeral Limit",
-    }
+    # ================================================================
+    # All Pods Table
+    # ================================================================
+    rename = {"Value #A": "GPU Req", "Value #B": "GPU Lim",
+              "Value #C": "vCPU Req", "Value #D": "vCPU Lim",
+              "Value #E": "Mem Req", "Value #F": "Mem Lim",
+              "Value #G": "Eph Req", "Value #H": "Eph Lim",
+              "pod": "Pod", "namespace": "Namespace", "node": "Node"}
     panels.append({
         "id": nid(), "title": "All Pods - Resource Requests and Limits",
-        "description": "Complete table of ALL pods in selected scope with named columns for each resource request and limit.",
+        "description": "Every pod in scope with named columns. GPU=count, vCPU=cores, Memory/Ephemeral=selected unit.",
         "type": "table", "datasource": ds(),
         "gridPos": {"h": 8, "w": 24, "x": 0, "y": y},
         "fieldConfig": {"defaults": {"custom": {"align": "auto", "displayMode": "auto", "filterable": True}},
             "overrides": [
-                {"matcher": {"id": "byName", "options": "pod"},
-                 "properties": [{"id": "custom.width", "value": 280}, {"id": "displayName", "value": "Pod"}]},
-                {"matcher": {"id": "byName", "options": "namespace"},
-                 "properties": [{"id": "custom.width", "value": 150}, {"id": "displayName", "value": "Namespace"}]},
-                {"matcher": {"id": "byName", "options": "node"},
-                 "properties": [{"id": "custom.width", "value": 180}, {"id": "displayName", "value": "Node"}]},
-                {"matcher": {"id": "byRegexp", "options": ".*GPU.*"},
-                 "properties": [{"id": "decimals", "value": 0},
-                    {"id": "custom.displayMode", "value": "gradient-gauge"},
+                {"matcher": {"id": "byName", "options": "Pod"}, "properties": [{"id": "custom.width", "value": 280}]},
+                {"matcher": {"id": "byName", "options": "Namespace"}, "properties": [{"id": "custom.width", "value": 140}]},
+                {"matcher": {"id": "byName", "options": "Node"}, "properties": [{"id": "custom.width", "value": 180}]},
+                {"matcher": {"id": "byRegexp", "options": "GPU.*"},
+                 "properties": [{"id": "decimals", "value": 0}, {"id": "custom.displayMode", "value": "gradient-gauge"},
                     {"id": "thresholds", "value": {"mode": "absolute", "steps": [
                         {"color": "#73BF69", "value": None}, {"color": "#FF4040", "value": 1}]}}]},
-                {"matcher": {"id": "byRegexp", "options": ".*vCPU.*"},
-                 "properties": [{"id": "decimals", "value": 2},
-                    {"id": "custom.displayMode", "value": "gradient-gauge"},
+                {"matcher": {"id": "byRegexp", "options": "vCPU.*"},
+                 "properties": [{"id": "decimals", "value": 2}, {"id": "custom.displayMode", "value": "gradient-gauge"},
                     {"id": "thresholds", "value": {"mode": "absolute", "steps": [
                         {"color": "#73BF69", "value": None}, {"color": "#FF9830", "value": 4}, {"color": "#FF4040", "value": 8}]}}]},
-                {"matcher": {"id": "byRegexp", "options": ".*Memory.*"},
-                 "properties": [{"id": "decimals", "value": 2},
-                    {"id": "custom.displayMode", "value": "gradient-gauge"},
+                {"matcher": {"id": "byRegexp", "options": "Mem.*|Eph.*"},
+                 "properties": [{"id": "decimals", "value": 2}, {"id": "custom.displayMode", "value": "gradient-gauge"},
                     {"id": "thresholds", "value": {"mode": "absolute", "steps": [
                         {"color": "#73BF69", "value": None}, {"color": "#FF9830", "value": 64}, {"color": "#FF4040", "value": 128}]}}]},
             ]},
-        "options": {"showHeader": True,
-            "sortBy": [{"displayName": "vCPU Request", "desc": True}],
+        "options": {"showHeader": True, "sortBy": [{"displayName": "vCPU Req", "desc": True}],
             "footer": {"show": True, "reducer": ["sum"],
-                "fields": ["GPU Request", "GPU Limit", "vCPU Request", "vCPU Limit", "Memory Request", "Memory Limit"]}},
+                "fields": ["GPU Req", "GPU Lim", "vCPU Req", "vCPU Lim", "Mem Req", "Mem Lim", "Eph Req", "Eph Lim"]}},
         "transformations": [
             {"id": "merge", "options": {}},
-            {"id": "organize", "options": {
-                "excludeByName": {"Time": True, "__name__": True},
-                "renameByName": rename_map
-            }}
+            {"id": "organize", "options": {"excludeByName": {"Time": True, "__name__": True},
+                "renameByName": rename}}
         ],
         "targets": refs([
             tgt(f'sum by (pod, namespace, node) (kube_pod_container_resource_requests{{{NSND}, resource="nvidia.com/gpu"}})', "", fmt="table"),
@@ -424,131 +460,99 @@ def build():
     y += 8
 
     # ================================================================
-    # PER-DIMENSION ROWS
+    # PER-DIMENSION ANALYSIS ROWS
     # ================================================================
-    dims = [
-        {"label": "GPU Count",       "resource": "nvidia.com/gpu",    "unit_var": "",               "sku_var": "$sku_gpu_count",
-         "axis": "GPUs",            "divisor": "1",                  "gunit": "short",
-         "req_color": "#B877D9",    "lim_color": "#FF9830"},
-        {"label": "vCPU",            "resource": "cpu",               "unit_var": "",               "sku_var": "$sku_cpu_cores",
-         "axis": "vCPU Cores",     "divisor": "1",                  "gunit": "short",
-         "req_color": "#5794F2",    "lim_color": "#FF9830"},
-        {"label": "Memory",          "resource": "memory",            "unit_var": "$memory_unit",   "sku_var": "$sku_memory_value",
-         "axis": "Memory (selected unit)", "divisor": "$memory_unit", "gunit": "short",
-         "req_color": "#8F3BB8",    "lim_color": "#F2CC0C"},
-        {"label": "VRAM (GPU Memory)", "resource": "vram",            "unit_var": "",               "sku_var": "$sku_vram_gib",
-         "axis": "VRAM (GiB)",     "divisor": "1073741824",         "gunit": "short",
-         "req_color": "#F2CC0C",    "lim_color": "#FF9830"},
-        {"label": "Local Storage",   "resource": "ephemeral-storage", "unit_var": "$storage_unit",  "sku_var": "$sku_storage_value",
-         "axis": "Storage (selected unit)", "divisor": "$storage_unit", "gunit": "short",
-         "req_color": "#56A64B",    "lim_color": "#E02F44"},
-    ]
+    for d in dimensions:
+        panels.append(row_panel(f"{d['label']} - Resource Analysis", y)); y += 1
 
-    for dim in dims:
-        panels.append(row_panel(f"{dim['label']} - Resource Analysis", y)); y += 1
-        r = dim["resource"]
-        div = dim["divisor"]
-        divs = f" / {div}" if div and div != "1" else ""
+        # 1. Heatmap table (request + limit per pod, gradient gauges) - replaces rainbow bar chart
+        panels.append(heatmap_table(
+            f"{d['label']} - Request and Limit per Pod",
+            f"Each pod's {d['label']} request and limit shown as gradient gauges. Sorted by highest request. Footer = sum total.",
+            {"h": 8, "w": 12, "x": 0, "y": y},
+            d["req_pod"], d["lim_pod"],
+            f"{d['label']} Request", f"{d['label']} Limit"
+        ))
 
-        if r == "vram":
-            # VRAM uses DCGM metrics
-            req_expr_pod = f'sum by (pod) (DCGM_FI_DEV_FB_USED{{{NSND}}}) / 1024'
-            lim_expr_pod = f'sum by (pod) (DCGM_FI_DEV_FB_USED{{{NSND}}} + DCGM_FI_DEV_FB_FREE{{{NSND}}}) / 1024'
-            req_expr_total = f'sum(DCGM_FI_DEV_FB_USED{{{NSND}}}) / 1024'
-            lim_expr_total = f'sum(DCGM_FI_DEV_FB_USED{{{NSND}}} + DCGM_FI_DEV_FB_FREE{{{NSND}}}) / 1024'
-            sku_total = dim["sku_var"]
+        # 2. Gauge: SKU capacity used
+        if d["label"] == "Memory":
+            gauge_expr = f'sum(kube_pod_container_resource_requests{{{NSND}, resource="memory"}}) / ($sku_memory_value * $memory_unit)'
+        elif d["label"] == "Local Storage (Ephemeral)":
+            gauge_expr = f'sum(kube_pod_container_resource_requests{{{NSND}, resource="ephemeral-storage"}}) / ($sku_storage_value * $storage_unit)'
         else:
-            req_expr_pod = f'sum by (pod) (kube_pod_container_resource_requests{{{NSND}, resource="{r}"}}){divs}'
-            lim_expr_pod = f'sum by (pod) (kube_pod_container_resource_limits{{{NSND}, resource="{r}"}}){divs}'
-            req_expr_total = f'sum(kube_pod_container_resource_requests{{{NSND}, resource="{r}"}}){divs}'
-            lim_expr_total = f'sum(kube_pod_container_resource_limits{{{NSND}, resource="{r}"}}){divs}'
-            sku_total = dim["sku_var"]
-
-        # Bar chart
-        panels.append(barchart_p(
-            f"{dim['label']} - Requests vs Limits per Pod",
-            f"Each pod's {dim['label']} request (blue) and limit (orange) side by side",
-            {"h": 10, "w": 12, "x": 0, "y": y},
-            [tgt(req_expr_pod, "{{pod}} Request", fmt="table"),
-             tgt(lim_expr_pod, "{{pod}} Limit", fmt="table")],
-            axis_label=dim["axis"], unit=dim["gunit"],
-            req_color=dim["req_color"], lim_color=dim["lim_color"]
-        ))
-
-        # Gauge
-        gauge_expr = f'{req_expr_total} / {sku_total}'
+            gauge_expr = f'{d["req_total"]} / {d["sku_var"]}'
         panels.append(gauge_p(
-            f"{dim['label']} - SKU Capacity Used",
-            f"What percentage of the configured {dim['label']} SKU is consumed by pod requests",
-            {"h": 5, "w": 6, "x": 12, "y": y},
-            [tgt(gauge_expr, f"{dim['label']}", instant=True)]
+            f"{d['label']} - SKU Capacity Used",
+            f"% of configured {d['label']} SKU consumed by total pod requests",
+            {"h": 4, "w": 6, "x": 12, "y": y},
+            [tgt(gauge_expr, d["label"], instant=True)]
         ))
 
-        # Absolute totals
+        # 3. Absolute totals
         panels.append(stat_p(
-            f"{dim['label']} - Absolute Totals",
-            f"Total {dim['label']} requests, limits, and SKU capacity side by side",
-            {"h": 5, "w": 6, "x": 18, "y": y},
-            [tgt(req_expr_total, "Total Reserved", instant=True),
-             tgt(lim_expr_total, "Total Limits", instant=True),
-             tgt(f'vector({sku_total})', "SKU Capacity", instant=True)],
+            f"{d['label']} - Absolute Totals",
+            f"Total {d['label']} reserved, limits, and SKU capacity",
+            {"h": 4, "w": 6, "x": 18, "y": y},
+            [tgt(d["req_total"], "Total Reserved", instant=True),
+             tgt(d["lim_total"], "Total Limits", instant=True),
+             tgt(f'vector({d["sku_var"]})', "SKU Capacity", instant=True)],
             decimals=1, color_mode="value", text_mode="value_and_name", orient="horizontal",
             thresholds={"mode": "absolute", "steps": [{"color": "#73BF69", "value": None}]}
         ))
-        y += 5
+        y += 4
 
-        # Aggregate time series with SKU line
+        # 4. Time series: aggregate reservation + limits + SKU threshold
         panels.append(ts_panel(
-            f"{dim['label']} - Aggregate Reservation and Limits Over Time",
-            f"Total {dim['label']} requests + limits over time. Red dashed line = SKU capacity threshold.",
-            {"h": 8, "w": 12, "x": 0, "y": y},
-            [tgt(req_expr_total, "Total Requests"),
-             tgt(lim_expr_total, "Total Limits"),
-             tgt(f'vector({sku_total})', "SKU Capacity")],
-            axis_label=dim["axis"], unit=dim["gunit"],
-            req_color=dim["req_color"], lim_color=dim["lim_color"]
+            f"{d['label']} - Aggregate Reservation and Limits Over Time",
+            f"Total {d['label']} requests + limits over time. Red dashed = SKU capacity.",
+            {"h": 8, "w": 12, "x": 0, "y": y + 4},
+            [tgt(d["req_total"], "Total Reserved"),
+             tgt(d["lim_total"], "Total Limits"),
+             tgt(f'vector({d["sku_var"]})', "SKU Capacity")],
+            axis_label=d["axis"],
+            req_color=d["req_color"], lim_color=d["lim_color"]
         ))
 
-        # Heatmap per node
-        panels.append(heatmap_panel(
-            f"{dim['label']} - Reservation by Node (Stacked)",
-            f"How {dim['label']} reservations are distributed across nodes. Helps identify hotspots.",
-            {"h": 8, "w": 12, "x": 12, "y": y},
-            resource=r, divisor=div, axis_label=dim["axis"]
+        # 5. Node stacked reservation
+        panels.append(node_stacked(
+            f"{d['label']} - Reservation by Node (Stacked)",
+            f"How {d['label']} reservations distribute across nodes. Each color = a node.",
+            {"h": 8, "w": 12, "x": 12, "y": y + 4},
+            d["req_by_node"], d["axis"]
         ))
-        y += 8
+        y += 12
 
-        # Per-pod time series
+        # 6. Per-pod actual vs request vs limit time series
         panels.append(per_pod_ts(
-            f"{dim['label']} - Per-Pod Actual Usage vs Requests vs Limits",
-            f"Solid = actual usage, Dashed = request, Dotted = limit. "
-            f"When solid exceeds dashed, the pod uses more than requested. When solid exceeds dotted, the pod exceeds its limit.",
+            f"{d['label']} - Per-Pod Actual Usage vs Requests vs Limits",
+            f"Solid = actual usage, Dashed = request, Dotted red = limit. "
+            f"When actual exceeds request, the pod is over-consuming vs its reservation.",
             {"h": 10, "w": 24, "x": 0, "y": y},
-            resource=r, divisor=div, axis_label=dim["axis"], unit=dim["gunit"]
+            d["usage_pod"], d["req_pod"], d["lim_pod"],
+            axis_label=d["axis"]
         ))
         y += 10
 
-        # Abusing pods table
+        # 7. Abusing pods table
         panels.append(abusing_table(
-            f"{dim['label']} - Pods Exceeding Allocations",
-            f"Pods where actual {dim['label']} usage exceeds their request or limit. "
-            f"Positive values mean the pod is consuming more than allocated.",
+            f"{d['label']} - Pods Exceeding Allocations",
+            f"Pods whose actual {d['label']} usage exceeds their request or limit.",
             {"h": 6, "w": 24, "x": 0, "y": y},
-            resource=r, divisor=div
+            d["usage_pod"], d["req_pod"], d["lim_pod"]
         ))
         y += 6
 
     # ================================================================
     # TEMPLATING
     # ================================================================
-    def unit_dropdown(name, label, desc, default_text, default_val):
+    def unit_dd(name, label, desc, default_text, default_val):
         opts = [
-            ("GiB (binary, 2^30 bytes)", "1073741824"),
-            ("MiB (binary, 2^20 bytes)", "1048576"),
-            ("TiB (binary, 2^40 bytes)", "1099511627776"),
-            ("GB (decimal, 10^9 bytes)", "1000000000"),
-            ("MB (decimal, 10^6 bytes)", "1000000"),
-            ("TB (decimal, 10^12 bytes)", "1000000000000"),
+            ("GiB (2^30 bytes)", "1073741824"),
+            ("MiB (2^20 bytes)", "1048576"),
+            ("TiB (2^40 bytes)", "1099511627776"),
+            ("GB (10^9 bytes)", "1000000000"),
+            ("MB (10^6 bytes)", "1000000"),
+            ("TB (10^12 bytes)", "1000000000000"),
             ("Bytes (raw)", "1"),
         ]
         return {
@@ -565,68 +569,65 @@ def build():
          "query": "prometheus", "current": {}, "hide": 0,
          "includeAll": False, "multi": False, "options": [],
          "refresh": 1, "regex": "", "skipUrlSync": False},
-        {"name": "namespace", "type": "query", "label": "Namespace",
+        {"name": "namespace", "type": "query", "label": "Namespace (multi-select)",
          "datasource": ds(),
          "definition": "label_values(kube_pod_info, namespace)",
          "query": {"query": "label_values(kube_pod_info, namespace)", "refId": "ns"},
          "current": {}, "hide": 0,
          "includeAll": True, "multi": True,
          "options": [], "refresh": 2, "regex": "", "sort": 1, "skipUrlSync": False},
-        {"name": "node", "type": "query", "label": "Node",
+        {"name": "node", "type": "query", "label": "Node (multi-select)",
          "datasource": ds(),
          "definition": 'label_values(kube_pod_info{namespace=~"$namespace"}, node)',
          "query": {"query": 'label_values(kube_pod_info{namespace=~"$namespace"}, node)', "refId": "nd"},
          "current": {}, "hide": 0,
          "includeAll": True, "multi": True,
          "options": [], "refresh": 2, "regex": "", "sort": 1, "skipUrlSync": False},
-        # --- SKU inputs ---
-        {"name": "sku_gpu_count", "type": "textbox", "label": "SKU: GPU Count (per node)",
+        {"name": "sku_gpu_count", "type": "textbox", "label": "SKU: GPU Count",
          "current": {"text": "8", "value": "8"}, "hide": 0,
          "options": [{"selected": True, "text": "8", "value": "8"}],
          "query": "8", "skipUrlSync": False,
-         "description": "Total number of GPUs available in the SKU (e.g. 8 for A100x8)"},
+         "description": "Total GPUs in the SKU (e.g. 8 for A100x8 node)"},
         {"name": "sku_cpu_cores", "type": "textbox", "label": "SKU: vCPU Cores",
          "current": {"text": "128", "value": "128"}, "hide": 0,
          "options": [{"selected": True, "text": "128", "value": "128"}],
-         "query": "128", "skipUrlSync": False,
-         "description": "Total vCPU cores in the SKU"},
+         "query": "128", "skipUrlSync": False},
         {"name": "sku_memory_value", "type": "textbox",
-         "label": "SKU: Memory (in unit selected below)",
+         "label": "SKU: Memory (in unit below)",
          "current": {"text": "22528", "value": "22528"}, "hide": 0,
          "options": [{"selected": True, "text": "22528", "value": "22528"}],
          "query": "22528", "skipUrlSync": False,
-         "description": "Total memory in the same unit as the Memory Unit dropdown (default: 22528 GiB = 22 TiB)"},
-        unit_dropdown("memory_unit", "Memory Display Unit",
-                      "Unit for memory values. SKU memory value must be in this same unit.", 
-                      "GiB (binary, 2^30 bytes)", "1073741824"),
-        {"name": "sku_vram_gib", "type": "textbox", "label": "SKU: VRAM / GPU Memory (GiB)",
+         "description": "Total memory in the same unit as Memory Unit dropdown (22528 GiB = 22 TiB)"},
+        unit_dd("memory_unit", "Memory Unit",
+                "Unit for memory. SKU memory value must be in this unit.",
+                "GiB (2^30 bytes)", "1073741824"),
+        {"name": "sku_vram_gib", "type": "textbox", "label": "SKU: VRAM (GiB)",
          "current": {"text": "640", "value": "640"}, "hide": 0,
          "options": [{"selected": True, "text": "640", "value": "640"}],
          "query": "640", "skipUrlSync": False,
-         "description": "Total GPU VRAM in GiB (e.g. 640 GiB for 8x A100 80GB)"},
+         "description": "Total GPU VRAM in GiB (640 GiB = 8x A100 80GB)"},
         {"name": "sku_storage_value", "type": "textbox",
-         "label": "SKU: Local Storage (in unit selected below)",
-         "current": {"text": "10240", "value": "10240"}, "hide": 0,
-         "options": [{"selected": True, "text": "10240", "value": "10240"}],
-         "query": "10240", "skipUrlSync": False,
-         "description": "Total local/ephemeral storage in the same unit as the Storage Unit dropdown"},
-        unit_dropdown("storage_unit", "Storage Display Unit",
-                      "Unit for local/ephemeral storage values. SKU value must be in this same unit.",
-                      "GiB (binary, 2^30 bytes)", "1073741824"),
+         "label": "SKU: Local Storage (in unit below)",
+         "current": {"text": "10", "value": "10"}, "hide": 0,
+         "options": [{"selected": True, "text": "10", "value": "10"}],
+         "query": "10", "skipUrlSync": False,
+         "description": "Total local/ephemeral storage in the unit selected below"},
+        unit_dd("storage_unit", "Storage Unit",
+                "Unit for local storage. SKU value must be in this unit.",
+                "TB (10^12 bytes)", "1000000000000"),
     ]}
 
-    dashboard = {
+    return {
         "__inputs": [], "__requires": [
             {"type": "grafana", "id": "grafana", "name": "Grafana", "version": "9.0.0"},
             {"type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0"}],
-        "id": None, "uid": "k8s-sku-violation-v3",
+        "id": None, "uid": "k8s-sku-violation-v4",
         "title": "K8s Pod Resources vs SKU Capacity",
-        "description": "Monitors K8s pod resource requests, limits, and actual usage against configurable SKU capacity. "
-                       "Covers GPU, vCPU, Memory, VRAM, and Local Storage with violation detection.",
-        "tags": ["kubernetes", "sku", "capacity", "gpu", "resources", "violations"],
+        "description": "Monitors K8s pod GPU, vCPU, Memory, VRAM, and Local Storage against configurable SKU capacity.",
+        "tags": ["kubernetes", "sku", "capacity", "gpu", "resources"],
         "style": "dark", "timezone": "browser", "editable": True,
         "graphTooltip": 1, "fiscalYearStartMonth": 0, "liveNow": False,
-        "refresh": "30s", "schemaVersion": 38, "version": 3,
+        "refresh": "30s", "schemaVersion": 38, "version": 4,
         "time": {"from": "now-1h", "to": "now"}, "timepicker": {},
         "annotations": {"list": [{"builtIn": 1, "datasource": {"type": "grafana", "uid": "-- Grafana --"},
             "enable": True, "hide": True, "iconColor": "rgba(0, 211, 255, 1)",
@@ -634,7 +635,6 @@ def build():
         "templating": templating,
         "panels": panels
     }
-    return dashboard
 
 
 if __name__ == "__main__":

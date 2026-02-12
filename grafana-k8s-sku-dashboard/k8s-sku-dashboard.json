@@ -15,16 +15,15 @@
         }
     ],
     "id": null,
-    "uid": "k8s-sku-violation-v3",
+    "uid": "k8s-sku-violation-v4",
     "title": "K8s Pod Resources vs SKU Capacity",
-    "description": "Monitors K8s pod resource requests, limits, and actual usage against configurable SKU capacity. Covers GPU, vCPU, Memory, VRAM, and Local Storage with violation detection.",
+    "description": "Monitors K8s pod GPU, vCPU, Memory, VRAM, and Local Storage against configurable SKU capacity.",
     "tags": [
         "kubernetes",
         "sku",
         "capacity",
         "gpu",
-        "resources",
-        "violations"
+        "resources"
     ],
     "style": "dark",
     "timezone": "browser",
@@ -34,7 +33,7 @@
     "liveNow": false,
     "refresh": "30s",
     "schemaVersion": 38,
-    "version": 3,
+    "version": 4,
     "time": {
         "from": "now-1h",
         "to": "now"
@@ -75,7 +74,7 @@
             {
                 "name": "namespace",
                 "type": "query",
-                "label": "Namespace",
+                "label": "Namespace (multi-select)",
                 "datasource": {
                     "type": "prometheus",
                     "uid": "${datasource}"
@@ -98,7 +97,7 @@
             {
                 "name": "node",
                 "type": "query",
-                "label": "Node",
+                "label": "Node (multi-select)",
                 "datasource": {
                     "type": "prometheus",
                     "uid": "${datasource}"
@@ -121,7 +120,7 @@
             {
                 "name": "sku_gpu_count",
                 "type": "textbox",
-                "label": "SKU: GPU Count (per node)",
+                "label": "SKU: GPU Count",
                 "current": {
                     "text": "8",
                     "value": "8"
@@ -136,7 +135,7 @@
                 ],
                 "query": "8",
                 "skipUrlSync": false,
-                "description": "Total number of GPUs available in the SKU (e.g. 8 for A100x8)"
+                "description": "Total GPUs in the SKU (e.g. 8 for A100x8 node)"
             },
             {
                 "name": "sku_cpu_cores",
@@ -155,13 +154,12 @@
                     }
                 ],
                 "query": "128",
-                "skipUrlSync": false,
-                "description": "Total vCPU cores in the SKU"
+                "skipUrlSync": false
             },
             {
                 "name": "sku_memory_value",
                 "type": "textbox",
-                "label": "SKU: Memory (in unit selected below)",
+                "label": "SKU: Memory (in unit below)",
                 "current": {
                     "text": "22528",
                     "value": "22528"
@@ -176,15 +174,15 @@
                 ],
                 "query": "22528",
                 "skipUrlSync": false,
-                "description": "Total memory in the same unit as the Memory Unit dropdown (default: 22528 GiB = 22 TiB)"
+                "description": "Total memory in the same unit as Memory Unit dropdown (22528 GiB = 22 TiB)"
             },
             {
                 "name": "memory_unit",
                 "type": "custom",
-                "label": "Memory Display Unit",
+                "label": "Memory Unit",
                 "current": {
                     "selected": true,
-                    "text": "GiB (binary, 2^30 bytes)",
+                    "text": "GiB (2^30 bytes)",
                     "value": "1073741824"
                 },
                 "hide": 0,
@@ -193,32 +191,32 @@
                 "options": [
                     {
                         "selected": true,
-                        "text": "GiB (binary, 2^30 bytes)",
+                        "text": "GiB (2^30 bytes)",
                         "value": "1073741824"
                     },
                     {
                         "selected": false,
-                        "text": "MiB (binary, 2^20 bytes)",
+                        "text": "MiB (2^20 bytes)",
                         "value": "1048576"
                     },
                     {
                         "selected": false,
-                        "text": "TiB (binary, 2^40 bytes)",
+                        "text": "TiB (2^40 bytes)",
                         "value": "1099511627776"
                     },
                     {
                         "selected": false,
-                        "text": "GB (decimal, 10^9 bytes)",
+                        "text": "GB (10^9 bytes)",
                         "value": "1000000000"
                     },
                     {
                         "selected": false,
-                        "text": "MB (decimal, 10^6 bytes)",
+                        "text": "MB (10^6 bytes)",
                         "value": "1000000"
                     },
                     {
                         "selected": false,
-                        "text": "TB (decimal, 10^12 bytes)",
+                        "text": "TB (10^12 bytes)",
                         "value": "1000000000000"
                     },
                     {
@@ -227,14 +225,14 @@
                         "value": "1"
                     }
                 ],
-                "query": "GiB (binary\\, 2^30 bytes) : 1073741824, MiB (binary\\, 2^20 bytes) : 1048576, TiB (binary\\, 2^40 bytes) : 1099511627776, GB (decimal\\, 10^9 bytes) : 1000000000, MB (decimal\\, 10^6 bytes) : 1000000, TB (decimal\\, 10^12 bytes) : 1000000000000, Bytes (raw) : 1",
+                "query": "GiB (2^30 bytes) : 1073741824, MiB (2^20 bytes) : 1048576, TiB (2^40 bytes) : 1099511627776, GB (10^9 bytes) : 1000000000, MB (10^6 bytes) : 1000000, TB (10^12 bytes) : 1000000000000, Bytes (raw) : 1",
                 "skipUrlSync": false,
-                "description": "Unit for memory values. SKU memory value must be in this same unit."
+                "description": "Unit for memory. SKU memory value must be in this unit."
             },
             {
                 "name": "sku_vram_gib",
                 "type": "textbox",
-                "label": "SKU: VRAM / GPU Memory (GiB)",
+                "label": "SKU: VRAM (GiB)",
                 "current": {
                     "text": "640",
                     "value": "640"
@@ -249,69 +247,69 @@
                 ],
                 "query": "640",
                 "skipUrlSync": false,
-                "description": "Total GPU VRAM in GiB (e.g. 640 GiB for 8x A100 80GB)"
+                "description": "Total GPU VRAM in GiB (640 GiB = 8x A100 80GB)"
             },
             {
                 "name": "sku_storage_value",
                 "type": "textbox",
-                "label": "SKU: Local Storage (in unit selected below)",
+                "label": "SKU: Local Storage (in unit below)",
                 "current": {
-                    "text": "10240",
-                    "value": "10240"
+                    "text": "10",
+                    "value": "10"
                 },
                 "hide": 0,
                 "options": [
                     {
                         "selected": true,
-                        "text": "10240",
-                        "value": "10240"
+                        "text": "10",
+                        "value": "10"
                     }
                 ],
-                "query": "10240",
+                "query": "10",
                 "skipUrlSync": false,
-                "description": "Total local/ephemeral storage in the same unit as the Storage Unit dropdown"
+                "description": "Total local/ephemeral storage in the unit selected below"
             },
             {
                 "name": "storage_unit",
                 "type": "custom",
-                "label": "Storage Display Unit",
+                "label": "Storage Unit",
                 "current": {
                     "selected": true,
-                    "text": "GiB (binary, 2^30 bytes)",
-                    "value": "1073741824"
+                    "text": "TB (10^12 bytes)",
+                    "value": "1000000000000"
                 },
                 "hide": 0,
                 "includeAll": false,
                 "multi": false,
                 "options": [
                     {
-                        "selected": true,
-                        "text": "GiB (binary, 2^30 bytes)",
+                        "selected": false,
+                        "text": "GiB (2^30 bytes)",
                         "value": "1073741824"
                     },
                     {
                         "selected": false,
-                        "text": "MiB (binary, 2^20 bytes)",
+                        "text": "MiB (2^20 bytes)",
                         "value": "1048576"
                     },
                     {
                         "selected": false,
-                        "text": "TiB (binary, 2^40 bytes)",
+                        "text": "TiB (2^40 bytes)",
                         "value": "1099511627776"
                     },
                     {
                         "selected": false,
-                        "text": "GB (decimal, 10^9 bytes)",
+                        "text": "GB (10^9 bytes)",
                         "value": "1000000000"
                     },
                     {
                         "selected": false,
-                        "text": "MB (decimal, 10^6 bytes)",
+                        "text": "MB (10^6 bytes)",
                         "value": "1000000"
                     },
                     {
-                        "selected": false,
-                        "text": "TB (decimal, 10^12 bytes)",
+                        "selected": true,
+                        "text": "TB (10^12 bytes)",
                         "value": "1000000000000"
                     },
                     {
@@ -320,9 +318,9 @@
                         "value": "1"
                     }
                 ],
-                "query": "GiB (binary\\, 2^30 bytes) : 1073741824, MiB (binary\\, 2^20 bytes) : 1048576, TiB (binary\\, 2^40 bytes) : 1099511627776, GB (decimal\\, 10^9 bytes) : 1000000000, MB (decimal\\, 10^6 bytes) : 1000000, TB (decimal\\, 10^12 bytes) : 1000000000000, Bytes (raw) : 1",
+                "query": "GiB (2^30 bytes) : 1073741824, MiB (2^20 bytes) : 1048576, TiB (2^40 bytes) : 1099511627776, GB (10^9 bytes) : 1000000000, MB (10^6 bytes) : 1000000, TB (10^12 bytes) : 1000000000000, Bytes (raw) : 1",
                 "skipUrlSync": false,
-                "description": "Unit for local/ephemeral storage values. SKU value must be in this same unit."
+                "description": "Unit for local storage. SKU value must be in this unit."
             }
         ]
     },
@@ -342,8 +340,8 @@
         },
         {
             "id": 2,
-            "title": "GPU SKU Status",
-            "description": "Whether total GPU requests/usage exceed the configured SKU. EXCEEDS SKU means the sum of all pod GPU reservations is larger than the SKU capacity you entered.",
+            "title": "GPU - SKU Status",
+            "description": "Whether total GPU requests exceed the configured SKU capacity. EXCEEDS SKU = sum of pod reservations > SKU value you entered.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -351,7 +349,7 @@
             },
             "gridPos": {
                 "h": 4,
-                "w": 4,
+                "w": 5,
                 "x": 0,
                 "y": 1
             },
@@ -421,8 +419,8 @@
         },
         {
             "id": 3,
-            "title": "vCPU SKU Status",
-            "description": "Whether total vCPU requests/usage exceed the configured SKU. EXCEEDS SKU means the sum of all pod vCPU reservations is larger than the SKU capacity you entered.",
+            "title": "vCPU - SKU Status",
+            "description": "Whether total vCPU requests exceed the configured SKU capacity. EXCEEDS SKU = sum of pod reservations > SKU value you entered.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -430,8 +428,8 @@
             },
             "gridPos": {
                 "h": 4,
-                "w": 4,
-                "x": 4,
+                "w": 5,
+                "x": 5,
                 "y": 1
             },
             "fieldConfig": {
@@ -500,8 +498,8 @@
         },
         {
             "id": 4,
-            "title": "Memory SKU Status",
-            "description": "Whether total Memory requests/usage exceed the configured SKU. EXCEEDS SKU means the sum of all pod Memory reservations is larger than the SKU capacity you entered.",
+            "title": "Memory - SKU Status",
+            "description": "Whether total Memory requests exceed the configured SKU capacity. EXCEEDS SKU = sum of pod reservations > SKU value you entered.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -509,8 +507,8 @@
             },
             "gridPos": {
                 "h": 4,
-                "w": 4,
-                "x": 8,
+                "w": 5,
+                "x": 10,
                 "y": 1
             },
             "fieldConfig": {
@@ -571,7 +569,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "clamp_max(ceil(sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"memory\"}) / $memory_unit / ($sku_memory_value * $memory_unit)), 1)",
+                    "expr": "clamp_max(ceil(sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"memory\"}) / ($sku_memory_value * $memory_unit)), 1)",
                     "legendFormat": "Memory",
                     "instant": true
                 }
@@ -579,8 +577,8 @@
         },
         {
             "id": 5,
-            "title": "VRAM SKU Status",
-            "description": "Whether total VRAM requests/usage exceed the configured SKU. EXCEEDS SKU means the sum of all pod VRAM reservations is larger than the SKU capacity you entered.",
+            "title": "VRAM (GPU Memory) - SKU Status",
+            "description": "Whether total VRAM (GPU Memory) requests exceed the configured SKU capacity. EXCEEDS SKU = sum of pod reservations > SKU value you entered.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -588,8 +586,8 @@
             },
             "gridPos": {
                 "h": 4,
-                "w": 4,
-                "x": 12,
+                "w": 5,
+                "x": 15,
                 "y": 1
             },
             "fieldConfig": {
@@ -651,15 +649,15 @@
                         "uid": "${datasource}"
                     },
                     "expr": "clamp_max(ceil(sum(DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"}) / 1024 / $sku_vram_gib), 1)",
-                    "legendFormat": "VRAM",
+                    "legendFormat": "VRAM (GPU Memory)",
                     "instant": true
                 }
             ]
         },
         {
             "id": 6,
-            "title": "Local Storage SKU Status",
-            "description": "Whether total Local Storage requests/usage exceed the configured SKU. EXCEEDS SKU means the sum of all pod Local Storage reservations is larger than the SKU capacity you entered.",
+            "title": "Local Storage (Ephemeral) - SKU Status",
+            "description": "Whether total Local Storage (Ephemeral) requests exceed the configured SKU capacity. EXCEEDS SKU = sum of pod reservations > SKU value you entered.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -667,8 +665,8 @@
             },
             "gridPos": {
                 "h": 4,
-                "w": 8,
-                "x": 16,
+                "w": 4,
+                "x": 20,
                 "y": 1
             },
             "fieldConfig": {
@@ -729,8 +727,117 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "clamp_max(ceil(sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"ephemeral-storage\"}) / $storage_unit / ($sku_storage_value * $storage_unit)), 1)",
-                    "legendFormat": "Local Storage",
+                    "expr": "clamp_max(ceil(sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"ephemeral-storage\"}) / ($sku_storage_value * $storage_unit)), 1)",
+                    "legendFormat": "Local Storage (Ephemeral)",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 7,
+            "title": "Resource Reservation Totals vs SKU Capacity (why violation occurs)",
+            "description": "Shows the total reserved amount for each resource alongside its SKU capacity. If Reserved > SKU, that resource is in violation. Compare these numbers directly.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 24,
+                "x": 0,
+                "y": 5
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 1,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#73BF69",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": []
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "horizontal",
+                "textMode": "value_and_name",
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"nvidia.com/gpu\"})",
+                    "legendFormat": "GPU Reserved",
+                    "instant": true
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "vector($sku_gpu_count)",
+                    "legendFormat": "GPU SKU Cap",
+                    "instant": true
+                },
+                {
+                    "refId": "C",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"cpu\"})",
+                    "legendFormat": "vCPU Reserved",
+                    "instant": true
+                },
+                {
+                    "refId": "D",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "vector($sku_cpu_cores)",
+                    "legendFormat": "vCPU SKU Cap",
+                    "instant": true
+                },
+                {
+                    "refId": "E",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"memory\"}) / $memory_unit",
+                    "legendFormat": "Mem Reserved",
+                    "instant": true
+                },
+                {
+                    "refId": "F",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "vector($sku_memory_value)",
+                    "legendFormat": "Mem SKU Cap",
                     "instant": true
                 }
             ]
@@ -743,15 +850,15 @@
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 5
+                "y": 9
             },
-            "id": 7,
+            "id": 8,
             "panels": []
         },
         {
-            "id": 8,
+            "id": 9,
             "title": "GPU - Reserved vs Used",
-            "description": "Left: percentage of GPU SKU reserved by pod requests. Right: actual GPU utilization vs SKU.",
+            "description": "Reserved = % of SKU claimed by pod requests. Used = actual utilization.",
             "type": "gauge",
             "datasource": {
                 "type": "prometheus",
@@ -759,9 +866,9 @@
             },
             "gridPos": {
                 "h": 5,
-                "w": 4,
+                "w": 5,
                 "x": 0,
-                "y": 6
+                "y": 10
             },
             "fieldConfig": {
                 "defaults": {
@@ -822,9 +929,9 @@
             ]
         },
         {
-            "id": 9,
+            "id": 10,
             "title": "vCPU - Reserved vs Used",
-            "description": "Left: percentage of vCPU SKU reserved by pod requests. Right: actual vCPU utilization vs SKU.",
+            "description": "Reserved = % of SKU claimed by pod requests. Used = actual utilization.",
             "type": "gauge",
             "datasource": {
                 "type": "prometheus",
@@ -832,9 +939,9 @@
             },
             "gridPos": {
                 "h": 5,
-                "w": 4,
-                "x": 4,
-                "y": 6
+                "w": 5,
+                "x": 5,
+                "y": 10
             },
             "fieldConfig": {
                 "defaults": {
@@ -895,9 +1002,9 @@
             ]
         },
         {
-            "id": 10,
+            "id": 11,
             "title": "Memory - Reserved vs Used",
-            "description": "Left: percentage of Memory SKU reserved by pod requests. Right: actual Memory utilization vs SKU.",
+            "description": "Reserved = % of SKU claimed by pod requests. Used = actual utilization.",
             "type": "gauge",
             "datasource": {
                 "type": "prometheus",
@@ -905,9 +1012,9 @@
             },
             "gridPos": {
                 "h": 5,
-                "w": 4,
-                "x": 8,
-                "y": 6
+                "w": 5,
+                "x": 10,
+                "y": 10
             },
             "fieldConfig": {
                 "defaults": {
@@ -968,9 +1075,9 @@
             ]
         },
         {
-            "id": 11,
-            "title": "VRAM - Reserved vs Used",
-            "description": "Left: percentage of VRAM SKU reserved by pod requests. Right: actual VRAM utilization vs SKU.",
+            "id": 12,
+            "title": "VRAM (GPU Memory) - Reserved vs Used",
+            "description": "Reserved = % of SKU claimed by pod requests. Used = actual utilization.",
             "type": "gauge",
             "datasource": {
                 "type": "prometheus",
@@ -978,9 +1085,9 @@
             },
             "gridPos": {
                 "h": 5,
-                "w": 4,
-                "x": 12,
-                "y": 6
+                "w": 5,
+                "x": 15,
+                "y": 10
             },
             "fieldConfig": {
                 "defaults": {
@@ -1041,9 +1148,9 @@
             ]
         },
         {
-            "id": 12,
-            "title": "Local Storage - Reserved vs Used",
-            "description": "Left: percentage of Local Storage SKU reserved by pod requests. Right: actual Local Storage utilization vs SKU.",
+            "id": 13,
+            "title": "Local Storage (Ephemeral) - Reserved vs Used",
+            "description": "Reserved = % of SKU claimed by pod requests. Used = actual utilization.",
             "type": "gauge",
             "datasource": {
                 "type": "prometheus",
@@ -1051,9 +1158,9 @@
             },
             "gridPos": {
                 "h": 5,
-                "w": 8,
-                "x": 16,
-                "y": 6
+                "w": 4,
+                "x": 20,
+                "y": 10
             },
             "fieldConfig": {
                 "defaults": {
@@ -1114,9 +1221,9 @@
             ]
         },
         {
-            "id": 13,
+            "id": 14,
             "title": "Running Pods (selected scope)",
-            "description": "Count of pods in selected namespace(s) and node(s)",
+            "description": "Total pods in selected namespace(s) / node(s)",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -1126,7 +1233,7 @@
                 "h": 3,
                 "w": 6,
                 "x": 0,
-                "y": 11
+                "y": 15
             },
             "fieldConfig": {
                 "defaults": {
@@ -1173,118 +1280,9 @@
             ]
         },
         {
-            "id": 14,
-            "title": "Resource Totals vs SKU Capacity",
-            "description": "Shows the absolute total reserved for each resource alongside the SKU capacity. If reserved > SKU, the resource is in violation.",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 3,
-                "w": 18,
-                "x": 6,
-                "y": 11
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "none",
-                    "decimals": 1,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#73BF69",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "mappings": []
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "horizontal",
-                "textMode": "value_and_name",
-                "colorMode": "value",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"nvidia.com/gpu\"})",
-                    "legendFormat": "GPU Reserved",
-                    "instant": true
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "vector($sku_gpu_count)",
-                    "legendFormat": "GPU SKU",
-                    "instant": true
-                },
-                {
-                    "refId": "C",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"cpu\"})",
-                    "legendFormat": "vCPU Reserved",
-                    "instant": true
-                },
-                {
-                    "refId": "D",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "vector($sku_cpu_cores)",
-                    "legendFormat": "vCPU SKU",
-                    "instant": true
-                },
-                {
-                    "refId": "E",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"memory\"}) / $memory_unit",
-                    "legendFormat": "Mem Reserved",
-                    "instant": true
-                },
-                {
-                    "refId": "F",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "vector($sku_memory_value)",
-                    "legendFormat": "Mem SKU",
-                    "instant": true
-                }
-            ]
-        },
-        {
             "id": 15,
             "title": "All Pods - Resource Requests and Limits",
-            "description": "Complete table of ALL pods in selected scope with named columns for each resource request and limit.",
+            "description": "Every pod in scope with named columns. GPU=count, vCPU=cores, Memory/Ephemeral=selected unit.",
             "type": "table",
             "datasource": {
                 "type": "prometheus",
@@ -1294,7 +1292,7 @@
                 "h": 8,
                 "w": 24,
                 "x": 0,
-                "y": 14
+                "y": 18
             },
             "fieldConfig": {
                 "defaults": {
@@ -1308,55 +1306,43 @@
                     {
                         "matcher": {
                             "id": "byName",
-                            "options": "pod"
+                            "options": "Pod"
                         },
                         "properties": [
                             {
                                 "id": "custom.width",
                                 "value": 280
-                            },
-                            {
-                                "id": "displayName",
-                                "value": "Pod"
                             }
                         ]
                     },
                     {
                         "matcher": {
                             "id": "byName",
-                            "options": "namespace"
+                            "options": "Namespace"
                         },
                         "properties": [
                             {
                                 "id": "custom.width",
-                                "value": 150
-                            },
-                            {
-                                "id": "displayName",
-                                "value": "Namespace"
+                                "value": 140
                             }
                         ]
                     },
                     {
                         "matcher": {
                             "id": "byName",
-                            "options": "node"
+                            "options": "Node"
                         },
                         "properties": [
                             {
                                 "id": "custom.width",
                                 "value": 180
-                            },
-                            {
-                                "id": "displayName",
-                                "value": "Node"
                             }
                         ]
                     },
                     {
                         "matcher": {
                             "id": "byRegexp",
-                            "options": ".*GPU.*"
+                            "options": "GPU.*"
                         },
                         "properties": [
                             {
@@ -1388,7 +1374,7 @@
                     {
                         "matcher": {
                             "id": "byRegexp",
-                            "options": ".*vCPU.*"
+                            "options": "vCPU.*"
                         },
                         "properties": [
                             {
@@ -1424,7 +1410,7 @@
                     {
                         "matcher": {
                             "id": "byRegexp",
-                            "options": ".*Memory.*"
+                            "options": "Mem.*|Eph.*"
                         },
                         "properties": [
                             {
@@ -1463,7 +1449,7 @@
                 "showHeader": true,
                 "sortBy": [
                     {
-                        "displayName": "vCPU Request",
+                        "displayName": "vCPU Req",
                         "desc": true
                     }
                 ],
@@ -1473,12 +1459,14 @@
                         "sum"
                     ],
                     "fields": [
-                        "GPU Request",
-                        "GPU Limit",
-                        "vCPU Request",
-                        "vCPU Limit",
-                        "Memory Request",
-                        "Memory Limit"
+                        "GPU Req",
+                        "GPU Lim",
+                        "vCPU Req",
+                        "vCPU Lim",
+                        "Mem Req",
+                        "Mem Lim",
+                        "Eph Req",
+                        "Eph Lim"
                     ]
                 }
             },
@@ -1495,14 +1483,17 @@
                             "__name__": true
                         },
                         "renameByName": {
-                            "Value #A": "GPU Request",
-                            "Value #B": "GPU Limit",
-                            "Value #C": "vCPU Request",
-                            "Value #D": "vCPU Limit",
-                            "Value #E": "Memory Request",
-                            "Value #F": "Memory Limit",
-                            "Value #G": "Ephemeral Request",
-                            "Value #H": "Ephemeral Limit"
+                            "Value #A": "GPU Req",
+                            "Value #B": "GPU Lim",
+                            "Value #C": "vCPU Req",
+                            "Value #D": "vCPU Lim",
+                            "Value #E": "Mem Req",
+                            "Value #F": "Mem Lim",
+                            "Value #G": "Eph Req",
+                            "Value #H": "Eph Lim",
+                            "pod": "Pod",
+                            "namespace": "Namespace",
+                            "node": "Node"
                         }
                     }
                 }
@@ -1600,77 +1591,145 @@
         },
         {
             "type": "row",
-            "title": "GPU Count - Resource Analysis",
+            "title": "GPU - Resource Analysis",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 22
+                "y": 26
             },
             "id": 16,
             "panels": []
         },
         {
             "id": 17,
-            "title": "GPU Count - Requests vs Limits per Pod",
-            "description": "Each pod's GPU Count request (blue) and limit (orange) side by side",
-            "type": "barchart",
+            "title": "GPU - Request and Limit per Pod",
+            "description": "Each pod's GPU request and limit shown as gradient gauges. Sorted by highest request. Footer = sum total.",
+            "type": "table",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 10,
+                "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 23
+                "y": 27
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "short",
-                    "decimals": 2,
-                    "color": {
-                        "mode": "palette-classic"
-                    },
                     "custom": {
-                        "lineWidth": 1,
-                        "fillOpacity": 80,
-                        "gradientMode": "scheme",
-                        "axisLabel": "GPUs",
-                        "axisSoftMin": 0,
-                        "stacking": {
-                            "mode": "none"
-                        }
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
                     }
                 },
                 "overrides": [
                     {
                         "matcher": {
-                            "id": "byRegexp",
-                            "options": ".*Request.*"
+                            "id": "byName",
+                            "options": "Pod"
                         },
                         "properties": [
                             {
-                                "id": "color",
+                                "id": "custom.width",
+                                "value": 300
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Node"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 200
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Namespace"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 150
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "GPU Request"
+                        },
+                        "properties": [
+                            {
+                                "id": "decimals",
+                                "value": 2
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "gradient-gauge"
+                            },
+                            {
+                                "id": "thresholds",
                                 "value": {
-                                    "mode": "fixed",
-                                    "fixedColor": "#B877D9"
+                                    "mode": "percentage",
+                                    "steps": [
+                                        {
+                                            "color": "#73BF69",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#FF9830",
+                                            "value": 60
+                                        },
+                                        {
+                                            "color": "#FF4040",
+                                            "value": 85
+                                        }
+                                    ]
                                 }
                             }
                         ]
                     },
                     {
                         "matcher": {
-                            "id": "byRegexp",
-                            "options": ".*Limit.*"
+                            "id": "byName",
+                            "options": "GPU Limit"
                         },
                         "properties": [
                             {
-                                "id": "color",
+                                "id": "decimals",
+                                "value": 2
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "gradient-gauge"
+                            },
+                            {
+                                "id": "thresholds",
                                 "value": {
-                                    "mode": "fixed",
-                                    "fixedColor": "#FF9830"
+                                    "mode": "percentage",
+                                    "steps": [
+                                        {
+                                            "color": "#73BF69",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#FF9830",
+                                            "value": 60
+                                        },
+                                        {
+                                            "color": "#FF4040",
+                                            "value": 85
+                                        }
+                                    ]
                                 }
                             }
                         ]
@@ -1678,18 +1737,46 @@
                 ]
             },
             "options": {
-                "orientation": "horizontal",
-                "barWidth": 0.7,
-                "groupWidth": 0.7,
-                "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom"
-                },
-                "tooltip": {
-                    "mode": "multi"
-                },
-                "xTickLabelRotation": -45
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "displayName": "GPU Request",
+                        "desc": true
+                    }
+                ],
+                "footer": {
+                    "show": true,
+                    "reducer": [
+                        "sum"
+                    ],
+                    "fields": [
+                        "GPU Request",
+                        "GPU Limit"
+                    ]
+                }
             },
+            "transformations": [
+                {
+                    "id": "merge",
+                    "options": {}
+                },
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true
+                        },
+                        "renameByName": {
+                            "pod": "Pod",
+                            "namespace": "Namespace",
+                            "node": "Node",
+                            "Value #A": "GPU Request",
+                            "Value #B": "GPU Limit"
+                        }
+                    }
+                }
+            ],
             "targets": [
                 {
                     "refId": "A",
@@ -1697,8 +1784,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"nvidia.com/gpu\"})",
-                    "legendFormat": "{{pod}} Request",
+                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"nvidia.com/gpu\"})",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 },
@@ -1708,8 +1795,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"nvidia.com/gpu\"})",
-                    "legendFormat": "{{pod}} Limit",
+                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"nvidia.com/gpu\"})",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 }
@@ -1717,18 +1804,18 @@
         },
         {
             "id": 18,
-            "title": "GPU Count - SKU Capacity Used",
-            "description": "What percentage of the configured GPU Count SKU is consumed by pod requests",
+            "title": "GPU - SKU Capacity Used",
+            "description": "% of configured GPU SKU consumed by total pod requests",
             "type": "gauge",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 5,
+                "h": 4,
                 "w": 6,
                 "x": 12,
-                "y": 23
+                "y": 27
             },
             "fieldConfig": {
                 "defaults": {
@@ -1773,25 +1860,25 @@
                         "uid": "${datasource}"
                     },
                     "expr": "sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"nvidia.com/gpu\"}) / $sku_gpu_count",
-                    "legendFormat": "GPU Count",
+                    "legendFormat": "GPU",
                     "instant": true
                 }
             ]
         },
         {
             "id": 19,
-            "title": "GPU Count - Absolute Totals",
-            "description": "Total GPU Count requests, limits, and SKU capacity side by side",
+            "title": "GPU - Absolute Totals",
+            "description": "Total GPU reserved, limits, and SKU capacity",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 5,
+                "h": 4,
                 "w": 6,
                 "x": 18,
-                "y": 23
+                "y": 27
             },
             "fieldConfig": {
                 "defaults": {
@@ -1859,8 +1946,8 @@
         },
         {
             "id": 20,
-            "title": "GPU Count - Aggregate Reservation and Limits Over Time",
-            "description": "Total GPU Count requests + limits over time. Red dashed line = SKU capacity threshold.",
+            "title": "GPU - Aggregate Reservation and Limits Over Time",
+            "description": "Total GPU requests + limits over time. Red dashed = SKU capacity.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1870,7 +1957,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 28
+                "y": 35
             },
             "fieldConfig": {
                 "defaults": {
@@ -1879,7 +1966,7 @@
                         "lineWidth": 2,
                         "fillOpacity": 15,
                         "gradientMode": "scheme",
-                        "axisLabel": "GPUs",
+                        "axisLabel": "GPU Count",
                         "drawStyle": "line",
                         "pointSize": 5,
                         "showPoints": "auto",
@@ -1923,7 +2010,7 @@
                     {
                         "matcher": {
                             "id": "byRegexp",
-                            "options": ".*Request.*"
+                            "options": ".*Request.*|.*Reserved.*"
                         },
                         "properties": [
                             {
@@ -1970,7 +2057,7 @@
                         "uid": "${datasource}"
                     },
                     "expr": "sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"nvidia.com/gpu\"})",
-                    "legendFormat": "Total Requests"
+                    "legendFormat": "Total Reserved"
                 },
                 {
                     "refId": "B",
@@ -1994,8 +2081,8 @@
         },
         {
             "id": 21,
-            "title": "GPU Count - Reservation by Node (Stacked)",
-            "description": "How GPU Count reservations are distributed across nodes. Helps identify hotspots.",
+            "title": "GPU - Reservation by Node (Stacked)",
+            "description": "How GPU reservations distribute across nodes. Each color = a node.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -2005,7 +2092,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 28
+                "y": 35
             },
             "fieldConfig": {
                 "defaults": {
@@ -2014,7 +2101,7 @@
                         "lineWidth": 0,
                         "fillOpacity": 80,
                         "gradientMode": "scheme",
-                        "axisLabel": "GPUs",
+                        "axisLabel": "GPU Count",
                         "drawStyle": "bars",
                         "pointSize": 5,
                         "stacking": {
@@ -2053,8 +2140,8 @@
         },
         {
             "id": 22,
-            "title": "GPU Count - Per-Pod Actual Usage vs Requests vs Limits",
-            "description": "Solid = actual usage, Dashed = request, Dotted = limit. When solid exceeds dashed, the pod uses more than requested. When solid exceeds dotted, the pod exceeds its limit.",
+            "title": "GPU - Per-Pod Actual Usage vs Requests vs Limits",
+            "description": "Solid = actual usage, Dashed = request, Dotted red = limit. When actual exceeds request, the pod is over-consuming vs its reservation.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -2064,7 +2151,7 @@
                 "h": 10,
                 "w": 24,
                 "x": 0,
-                "y": 36
+                "y": 43
             },
             "fieldConfig": {
                 "defaults": {
@@ -2073,7 +2160,7 @@
                         "lineWidth": 1,
                         "fillOpacity": 10,
                         "gradientMode": "scheme",
-                        "axisLabel": "GPUs",
+                        "axisLabel": "GPU Count",
                         "drawStyle": "line",
                         "pointSize": 3,
                         "showPoints": "never",
@@ -2171,7 +2258,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (DCGM_FI_DEV_GPU_UTIL{namespace=~\"$namespace\", node=~\"$node\"}) / 100",
+                    "expr": "sum by (pod, namespace, node) (DCGM_FI_DEV_GPU_UTIL{namespace=~\"$namespace\", node=~\"$node\"}) / 100",
                     "legendFormat": "{{pod}} Actual"
                 },
                 {
@@ -2180,7 +2267,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"nvidia.com/gpu\"})",
+                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"nvidia.com/gpu\"})",
                     "legendFormat": "{{pod}} Request"
                 },
                 {
@@ -2189,15 +2276,15 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"nvidia.com/gpu\"})",
+                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"nvidia.com/gpu\"})",
                     "legendFormat": "{{pod}} Limit"
                 }
             ]
         },
         {
             "id": 23,
-            "title": "GPU Count - Pods Exceeding Allocations",
-            "description": "Pods where actual GPU Count usage exceeds their request or limit. Positive values mean the pod is consuming more than allocated.",
+            "title": "GPU - Pods Exceeding Allocations",
+            "description": "Pods whose actual GPU usage exceeds their request or limit.",
             "type": "table",
             "datasource": {
                 "type": "prometheus",
@@ -2207,7 +2294,7 @@
                 "h": 6,
                 "w": 24,
                 "x": 0,
-                "y": 46
+                "y": 53
             },
             "fieldConfig": {
                 "defaults": {
@@ -2224,6 +2311,10 @@
                             "options": "Excess Over Request"
                         },
                         "properties": [
+                            {
+                                "id": "decimals",
+                                "value": 2
+                            },
                             {
                                 "id": "custom.displayMode",
                                 "value": "gradient-gauge"
@@ -2256,6 +2347,10 @@
                             "options": "Excess Over Limit"
                         },
                         "properties": [
+                            {
+                                "id": "decimals",
+                                "value": 2
+                            },
                             {
                                 "id": "custom.displayMode",
                                 "value": "gradient-gauge"
@@ -2305,9 +2400,13 @@
                     "id": "organize",
                     "options": {
                         "excludeByName": {
-                            "Time": true
+                            "Time": true,
+                            "__name__": true
                         },
                         "renameByName": {
+                            "pod": "Pod",
+                            "namespace": "Namespace",
+                            "node": "Node",
                             "Value #A": "Excess Over Request",
                             "Value #B": "Excess Over Limit"
                         }
@@ -2322,7 +2421,7 @@
                         "uid": "${datasource}"
                     },
                     "expr": "(sum by (pod, namespace, node) (DCGM_FI_DEV_GPU_UTIL{namespace=~\"$namespace\", node=~\"$node\"}) / 100 - sum by (pod, namespace, node) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"nvidia.com/gpu\"})) > 0",
-                    "legendFormat": "Excess Over Request",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 },
@@ -2332,8 +2431,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "(sum by (pod, namespace, node) (DCGM_FI_DEV_GPU_UTIL{namespace=~\"$namespace\", node=~\"$node\"}) / 100 - sum by (pod, namespace, node) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"nvidia.com/gpu\"})) > 0",
-                    "legendFormat": "Excess Over Limit",
+                    "expr": "(sum by (pod, namespace, node) (DCGM_FI_DEV_GPU_UTIL{namespace=~\"$namespace\", node=~\"$node\"}) / 100 - sum by (pod, namespace, node) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"nvidia.com/gpu\"})) > 0",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 }
@@ -2347,71 +2446,139 @@
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 52
+                "y": 59
             },
             "id": 24,
             "panels": []
         },
         {
             "id": 25,
-            "title": "vCPU - Requests vs Limits per Pod",
-            "description": "Each pod's vCPU request (blue) and limit (orange) side by side",
-            "type": "barchart",
+            "title": "vCPU - Request and Limit per Pod",
+            "description": "Each pod's vCPU request and limit shown as gradient gauges. Sorted by highest request. Footer = sum total.",
+            "type": "table",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 10,
+                "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 53
+                "y": 60
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "short",
-                    "decimals": 2,
-                    "color": {
-                        "mode": "palette-classic"
-                    },
                     "custom": {
-                        "lineWidth": 1,
-                        "fillOpacity": 80,
-                        "gradientMode": "scheme",
-                        "axisLabel": "vCPU Cores",
-                        "axisSoftMin": 0,
-                        "stacking": {
-                            "mode": "none"
-                        }
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
                     }
                 },
                 "overrides": [
                     {
                         "matcher": {
-                            "id": "byRegexp",
-                            "options": ".*Request.*"
+                            "id": "byName",
+                            "options": "Pod"
                         },
                         "properties": [
                             {
-                                "id": "color",
+                                "id": "custom.width",
+                                "value": 300
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Node"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 200
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Namespace"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 150
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "vCPU Request"
+                        },
+                        "properties": [
+                            {
+                                "id": "decimals",
+                                "value": 2
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "gradient-gauge"
+                            },
+                            {
+                                "id": "thresholds",
                                 "value": {
-                                    "mode": "fixed",
-                                    "fixedColor": "#5794F2"
+                                    "mode": "percentage",
+                                    "steps": [
+                                        {
+                                            "color": "#73BF69",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#FF9830",
+                                            "value": 60
+                                        },
+                                        {
+                                            "color": "#FF4040",
+                                            "value": 85
+                                        }
+                                    ]
                                 }
                             }
                         ]
                     },
                     {
                         "matcher": {
-                            "id": "byRegexp",
-                            "options": ".*Limit.*"
+                            "id": "byName",
+                            "options": "vCPU Limit"
                         },
                         "properties": [
                             {
-                                "id": "color",
+                                "id": "decimals",
+                                "value": 2
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "gradient-gauge"
+                            },
+                            {
+                                "id": "thresholds",
                                 "value": {
-                                    "mode": "fixed",
-                                    "fixedColor": "#FF9830"
+                                    "mode": "percentage",
+                                    "steps": [
+                                        {
+                                            "color": "#73BF69",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#FF9830",
+                                            "value": 60
+                                        },
+                                        {
+                                            "color": "#FF4040",
+                                            "value": 85
+                                        }
+                                    ]
                                 }
                             }
                         ]
@@ -2419,18 +2586,46 @@
                 ]
             },
             "options": {
-                "orientation": "horizontal",
-                "barWidth": 0.7,
-                "groupWidth": 0.7,
-                "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom"
-                },
-                "tooltip": {
-                    "mode": "multi"
-                },
-                "xTickLabelRotation": -45
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "displayName": "vCPU Request",
+                        "desc": true
+                    }
+                ],
+                "footer": {
+                    "show": true,
+                    "reducer": [
+                        "sum"
+                    ],
+                    "fields": [
+                        "vCPU Request",
+                        "vCPU Limit"
+                    ]
+                }
             },
+            "transformations": [
+                {
+                    "id": "merge",
+                    "options": {}
+                },
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true
+                        },
+                        "renameByName": {
+                            "pod": "Pod",
+                            "namespace": "Namespace",
+                            "node": "Node",
+                            "Value #A": "vCPU Request",
+                            "Value #B": "vCPU Limit"
+                        }
+                    }
+                }
+            ],
             "targets": [
                 {
                     "refId": "A",
@@ -2438,8 +2633,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"cpu\"})",
-                    "legendFormat": "{{pod}} Request",
+                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"cpu\"})",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 },
@@ -2449,8 +2644,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"cpu\"})",
-                    "legendFormat": "{{pod}} Limit",
+                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"cpu\"})",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 }
@@ -2459,17 +2654,17 @@
         {
             "id": 26,
             "title": "vCPU - SKU Capacity Used",
-            "description": "What percentage of the configured vCPU SKU is consumed by pod requests",
+            "description": "% of configured vCPU SKU consumed by total pod requests",
             "type": "gauge",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 5,
+                "h": 4,
                 "w": 6,
                 "x": 12,
-                "y": 53
+                "y": 60
             },
             "fieldConfig": {
                 "defaults": {
@@ -2522,17 +2717,17 @@
         {
             "id": 27,
             "title": "vCPU - Absolute Totals",
-            "description": "Total vCPU requests, limits, and SKU capacity side by side",
+            "description": "Total vCPU reserved, limits, and SKU capacity",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 5,
+                "h": 4,
                 "w": 6,
                 "x": 18,
-                "y": 53
+                "y": 60
             },
             "fieldConfig": {
                 "defaults": {
@@ -2601,7 +2796,7 @@
         {
             "id": 28,
             "title": "vCPU - Aggregate Reservation and Limits Over Time",
-            "description": "Total vCPU requests + limits over time. Red dashed line = SKU capacity threshold.",
+            "description": "Total vCPU requests + limits over time. Red dashed = SKU capacity.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -2611,7 +2806,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 58
+                "y": 68
             },
             "fieldConfig": {
                 "defaults": {
@@ -2664,7 +2859,7 @@
                     {
                         "matcher": {
                             "id": "byRegexp",
-                            "options": ".*Request.*"
+                            "options": ".*Request.*|.*Reserved.*"
                         },
                         "properties": [
                             {
@@ -2711,7 +2906,7 @@
                         "uid": "${datasource}"
                     },
                     "expr": "sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"cpu\"})",
-                    "legendFormat": "Total Requests"
+                    "legendFormat": "Total Reserved"
                 },
                 {
                     "refId": "B",
@@ -2736,7 +2931,7 @@
         {
             "id": 29,
             "title": "vCPU - Reservation by Node (Stacked)",
-            "description": "How vCPU reservations are distributed across nodes. Helps identify hotspots.",
+            "description": "How vCPU reservations distribute across nodes. Each color = a node.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -2746,7 +2941,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 58
+                "y": 68
             },
             "fieldConfig": {
                 "defaults": {
@@ -2795,7 +2990,7 @@
         {
             "id": 30,
             "title": "vCPU - Per-Pod Actual Usage vs Requests vs Limits",
-            "description": "Solid = actual usage, Dashed = request, Dotted = limit. When solid exceeds dashed, the pod uses more than requested. When solid exceeds dotted, the pod exceeds its limit.",
+            "description": "Solid = actual usage, Dashed = request, Dotted red = limit. When actual exceeds request, the pod is over-consuming vs its reservation.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -2805,7 +3000,7 @@
                 "h": 10,
                 "w": 24,
                 "x": 0,
-                "y": 66
+                "y": 76
             },
             "fieldConfig": {
                 "defaults": {
@@ -2912,7 +3107,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", node=~\"$node\"}[5m]))",
+                    "expr": "sum by (pod, namespace, node) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", node=~\"$node\"}[5m]))",
                     "legendFormat": "{{pod}} Actual"
                 },
                 {
@@ -2921,7 +3116,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"cpu\"})",
+                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"cpu\"})",
                     "legendFormat": "{{pod}} Request"
                 },
                 {
@@ -2930,7 +3125,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"cpu\"})",
+                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"cpu\"})",
                     "legendFormat": "{{pod}} Limit"
                 }
             ]
@@ -2938,7 +3133,7 @@
         {
             "id": 31,
             "title": "vCPU - Pods Exceeding Allocations",
-            "description": "Pods where actual vCPU usage exceeds their request or limit. Positive values mean the pod is consuming more than allocated.",
+            "description": "Pods whose actual vCPU usage exceeds their request or limit.",
             "type": "table",
             "datasource": {
                 "type": "prometheus",
@@ -2948,7 +3143,7 @@
                 "h": 6,
                 "w": 24,
                 "x": 0,
-                "y": 76
+                "y": 86
             },
             "fieldConfig": {
                 "defaults": {
@@ -2965,6 +3160,10 @@
                             "options": "Excess Over Request"
                         },
                         "properties": [
+                            {
+                                "id": "decimals",
+                                "value": 2
+                            },
                             {
                                 "id": "custom.displayMode",
                                 "value": "gradient-gauge"
@@ -2997,6 +3196,10 @@
                             "options": "Excess Over Limit"
                         },
                         "properties": [
+                            {
+                                "id": "decimals",
+                                "value": 2
+                            },
                             {
                                 "id": "custom.displayMode",
                                 "value": "gradient-gauge"
@@ -3046,9 +3249,13 @@
                     "id": "organize",
                     "options": {
                         "excludeByName": {
-                            "Time": true
+                            "Time": true,
+                            "__name__": true
                         },
                         "renameByName": {
+                            "pod": "Pod",
+                            "namespace": "Namespace",
+                            "node": "Node",
                             "Value #A": "Excess Over Request",
                             "Value #B": "Excess Over Limit"
                         }
@@ -3063,7 +3270,7 @@
                         "uid": "${datasource}"
                     },
                     "expr": "(sum by (pod, namespace, node) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", node=~\"$node\"}[5m])) - sum by (pod, namespace, node) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"cpu\"})) > 0",
-                    "legendFormat": "Excess Over Request",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 },
@@ -3074,7 +3281,7 @@
                         "uid": "${datasource}"
                     },
                     "expr": "(sum by (pod, namespace, node) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", node=~\"$node\"}[5m])) - sum by (pod, namespace, node) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"cpu\"})) > 0",
-                    "legendFormat": "Excess Over Limit",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 }
@@ -3088,71 +3295,139 @@
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 82
+                "y": 92
             },
             "id": 32,
             "panels": []
         },
         {
             "id": 33,
-            "title": "Memory - Requests vs Limits per Pod",
-            "description": "Each pod's Memory request (blue) and limit (orange) side by side",
-            "type": "barchart",
+            "title": "Memory - Request and Limit per Pod",
+            "description": "Each pod's Memory request and limit shown as gradient gauges. Sorted by highest request. Footer = sum total.",
+            "type": "table",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 10,
+                "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 83
+                "y": 93
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "short",
-                    "decimals": 2,
-                    "color": {
-                        "mode": "palette-classic"
-                    },
                     "custom": {
-                        "lineWidth": 1,
-                        "fillOpacity": 80,
-                        "gradientMode": "scheme",
-                        "axisLabel": "Memory (selected unit)",
-                        "axisSoftMin": 0,
-                        "stacking": {
-                            "mode": "none"
-                        }
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
                     }
                 },
                 "overrides": [
                     {
                         "matcher": {
-                            "id": "byRegexp",
-                            "options": ".*Request.*"
+                            "id": "byName",
+                            "options": "Pod"
                         },
                         "properties": [
                             {
-                                "id": "color",
+                                "id": "custom.width",
+                                "value": 300
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Node"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 200
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Namespace"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 150
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Memory Request"
+                        },
+                        "properties": [
+                            {
+                                "id": "decimals",
+                                "value": 2
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "gradient-gauge"
+                            },
+                            {
+                                "id": "thresholds",
                                 "value": {
-                                    "mode": "fixed",
-                                    "fixedColor": "#8F3BB8"
+                                    "mode": "percentage",
+                                    "steps": [
+                                        {
+                                            "color": "#73BF69",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#FF9830",
+                                            "value": 60
+                                        },
+                                        {
+                                            "color": "#FF4040",
+                                            "value": 85
+                                        }
+                                    ]
                                 }
                             }
                         ]
                     },
                     {
                         "matcher": {
-                            "id": "byRegexp",
-                            "options": ".*Limit.*"
+                            "id": "byName",
+                            "options": "Memory Limit"
                         },
                         "properties": [
                             {
-                                "id": "color",
+                                "id": "decimals",
+                                "value": 2
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "gradient-gauge"
+                            },
+                            {
+                                "id": "thresholds",
                                 "value": {
-                                    "mode": "fixed",
-                                    "fixedColor": "#F2CC0C"
+                                    "mode": "percentage",
+                                    "steps": [
+                                        {
+                                            "color": "#73BF69",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#FF9830",
+                                            "value": 60
+                                        },
+                                        {
+                                            "color": "#FF4040",
+                                            "value": 85
+                                        }
+                                    ]
                                 }
                             }
                         ]
@@ -3160,18 +3435,46 @@
                 ]
             },
             "options": {
-                "orientation": "horizontal",
-                "barWidth": 0.7,
-                "groupWidth": 0.7,
-                "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom"
-                },
-                "tooltip": {
-                    "mode": "multi"
-                },
-                "xTickLabelRotation": -45
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "displayName": "Memory Request",
+                        "desc": true
+                    }
+                ],
+                "footer": {
+                    "show": true,
+                    "reducer": [
+                        "sum"
+                    ],
+                    "fields": [
+                        "Memory Request",
+                        "Memory Limit"
+                    ]
+                }
             },
+            "transformations": [
+                {
+                    "id": "merge",
+                    "options": {}
+                },
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true
+                        },
+                        "renameByName": {
+                            "pod": "Pod",
+                            "namespace": "Namespace",
+                            "node": "Node",
+                            "Value #A": "Memory Request",
+                            "Value #B": "Memory Limit"
+                        }
+                    }
+                }
+            ],
             "targets": [
                 {
                     "refId": "A",
@@ -3179,8 +3482,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"memory\"}) / $memory_unit",
-                    "legendFormat": "{{pod}} Request",
+                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"memory\"}) / $memory_unit",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 },
@@ -3190,8 +3493,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"memory\"}) / $memory_unit",
-                    "legendFormat": "{{pod}} Limit",
+                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"memory\"}) / $memory_unit",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 }
@@ -3200,17 +3503,17 @@
         {
             "id": 34,
             "title": "Memory - SKU Capacity Used",
-            "description": "What percentage of the configured Memory SKU is consumed by pod requests",
+            "description": "% of configured Memory SKU consumed by total pod requests",
             "type": "gauge",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 5,
+                "h": 4,
                 "w": 6,
                 "x": 12,
-                "y": 83
+                "y": 93
             },
             "fieldConfig": {
                 "defaults": {
@@ -3254,7 +3557,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"memory\"}) / $memory_unit / $sku_memory_value",
+                    "expr": "sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"memory\"}) / ($sku_memory_value * $memory_unit)",
                     "legendFormat": "Memory",
                     "instant": true
                 }
@@ -3263,17 +3566,17 @@
         {
             "id": 35,
             "title": "Memory - Absolute Totals",
-            "description": "Total Memory requests, limits, and SKU capacity side by side",
+            "description": "Total Memory reserved, limits, and SKU capacity",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 5,
+                "h": 4,
                 "w": 6,
                 "x": 18,
-                "y": 83
+                "y": 93
             },
             "fieldConfig": {
                 "defaults": {
@@ -3342,7 +3645,7 @@
         {
             "id": 36,
             "title": "Memory - Aggregate Reservation and Limits Over Time",
-            "description": "Total Memory requests + limits over time. Red dashed line = SKU capacity threshold.",
+            "description": "Total Memory requests + limits over time. Red dashed = SKU capacity.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -3352,7 +3655,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 88
+                "y": 101
             },
             "fieldConfig": {
                 "defaults": {
@@ -3405,7 +3708,7 @@
                     {
                         "matcher": {
                             "id": "byRegexp",
-                            "options": ".*Request.*"
+                            "options": ".*Request.*|.*Reserved.*"
                         },
                         "properties": [
                             {
@@ -3452,7 +3755,7 @@
                         "uid": "${datasource}"
                     },
                     "expr": "sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"memory\"}) / $memory_unit",
-                    "legendFormat": "Total Requests"
+                    "legendFormat": "Total Reserved"
                 },
                 {
                     "refId": "B",
@@ -3477,7 +3780,7 @@
         {
             "id": 37,
             "title": "Memory - Reservation by Node (Stacked)",
-            "description": "How Memory reservations are distributed across nodes. Helps identify hotspots.",
+            "description": "How Memory reservations distribute across nodes. Each color = a node.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -3487,7 +3790,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 88
+                "y": 101
             },
             "fieldConfig": {
                 "defaults": {
@@ -3536,7 +3839,7 @@
         {
             "id": 38,
             "title": "Memory - Per-Pod Actual Usage vs Requests vs Limits",
-            "description": "Solid = actual usage, Dashed = request, Dotted = limit. When solid exceeds dashed, the pod uses more than requested. When solid exceeds dotted, the pod exceeds its limit.",
+            "description": "Solid = actual usage, Dashed = request, Dotted red = limit. When actual exceeds request, the pod is over-consuming vs its reservation.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -3546,7 +3849,7 @@
                 "h": 10,
                 "w": 24,
                 "x": 0,
-                "y": 96
+                "y": 109
             },
             "fieldConfig": {
                 "defaults": {
@@ -3653,7 +3956,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=~\"$namespace\", node=~\"$node\"}) / $memory_unit",
+                    "expr": "sum by (pod, namespace, node) (container_memory_working_set_bytes{namespace=~\"$namespace\", node=~\"$node\"}) / $memory_unit",
                     "legendFormat": "{{pod}} Actual"
                 },
                 {
@@ -3662,7 +3965,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"memory\"}) / $memory_unit",
+                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"memory\"}) / $memory_unit",
                     "legendFormat": "{{pod}} Request"
                 },
                 {
@@ -3671,7 +3974,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"memory\"}) / $memory_unit",
+                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"memory\"}) / $memory_unit",
                     "legendFormat": "{{pod}} Limit"
                 }
             ]
@@ -3679,7 +3982,7 @@
         {
             "id": 39,
             "title": "Memory - Pods Exceeding Allocations",
-            "description": "Pods where actual Memory usage exceeds their request or limit. Positive values mean the pod is consuming more than allocated.",
+            "description": "Pods whose actual Memory usage exceeds their request or limit.",
             "type": "table",
             "datasource": {
                 "type": "prometheus",
@@ -3689,7 +3992,7 @@
                 "h": 6,
                 "w": 24,
                 "x": 0,
-                "y": 106
+                "y": 119
             },
             "fieldConfig": {
                 "defaults": {
@@ -3706,6 +4009,10 @@
                             "options": "Excess Over Request"
                         },
                         "properties": [
+                            {
+                                "id": "decimals",
+                                "value": 2
+                            },
                             {
                                 "id": "custom.displayMode",
                                 "value": "gradient-gauge"
@@ -3738,6 +4045,10 @@
                             "options": "Excess Over Limit"
                         },
                         "properties": [
+                            {
+                                "id": "decimals",
+                                "value": 2
+                            },
                             {
                                 "id": "custom.displayMode",
                                 "value": "gradient-gauge"
@@ -3787,9 +4098,13 @@
                     "id": "organize",
                     "options": {
                         "excludeByName": {
-                            "Time": true
+                            "Time": true,
+                            "__name__": true
                         },
                         "renameByName": {
+                            "pod": "Pod",
+                            "namespace": "Namespace",
+                            "node": "Node",
                             "Value #A": "Excess Over Request",
                             "Value #B": "Excess Over Limit"
                         }
@@ -3804,7 +4119,7 @@
                         "uid": "${datasource}"
                     },
                     "expr": "(sum by (pod, namespace, node) (container_memory_working_set_bytes{namespace=~\"$namespace\", node=~\"$node\"}) / $memory_unit - sum by (pod, namespace, node) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"memory\"}) / $memory_unit) > 0",
-                    "legendFormat": "Excess Over Request",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 },
@@ -3815,7 +4130,7 @@
                         "uid": "${datasource}"
                     },
                     "expr": "(sum by (pod, namespace, node) (container_memory_working_set_bytes{namespace=~\"$namespace\", node=~\"$node\"}) / $memory_unit - sum by (pod, namespace, node) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"memory\"}) / $memory_unit) > 0",
-                    "legendFormat": "Excess Over Limit",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 }
@@ -3829,71 +4144,139 @@
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 112
+                "y": 125
             },
             "id": 40,
             "panels": []
         },
         {
             "id": 41,
-            "title": "VRAM (GPU Memory) - Requests vs Limits per Pod",
-            "description": "Each pod's VRAM (GPU Memory) request (blue) and limit (orange) side by side",
-            "type": "barchart",
+            "title": "VRAM (GPU Memory) - Request and Limit per Pod",
+            "description": "Each pod's VRAM (GPU Memory) request and limit shown as gradient gauges. Sorted by highest request. Footer = sum total.",
+            "type": "table",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 10,
+                "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 113
+                "y": 126
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "short",
-                    "decimals": 2,
-                    "color": {
-                        "mode": "palette-classic"
-                    },
                     "custom": {
-                        "lineWidth": 1,
-                        "fillOpacity": 80,
-                        "gradientMode": "scheme",
-                        "axisLabel": "VRAM (GiB)",
-                        "axisSoftMin": 0,
-                        "stacking": {
-                            "mode": "none"
-                        }
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
                     }
                 },
                 "overrides": [
                     {
                         "matcher": {
-                            "id": "byRegexp",
-                            "options": ".*Request.*"
+                            "id": "byName",
+                            "options": "Pod"
                         },
                         "properties": [
                             {
-                                "id": "color",
+                                "id": "custom.width",
+                                "value": 300
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Node"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 200
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Namespace"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 150
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "VRAM (GPU Memory) Request"
+                        },
+                        "properties": [
+                            {
+                                "id": "decimals",
+                                "value": 2
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "gradient-gauge"
+                            },
+                            {
+                                "id": "thresholds",
                                 "value": {
-                                    "mode": "fixed",
-                                    "fixedColor": "#F2CC0C"
+                                    "mode": "percentage",
+                                    "steps": [
+                                        {
+                                            "color": "#73BF69",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#FF9830",
+                                            "value": 60
+                                        },
+                                        {
+                                            "color": "#FF4040",
+                                            "value": 85
+                                        }
+                                    ]
                                 }
                             }
                         ]
                     },
                     {
                         "matcher": {
-                            "id": "byRegexp",
-                            "options": ".*Limit.*"
+                            "id": "byName",
+                            "options": "VRAM (GPU Memory) Limit"
                         },
                         "properties": [
                             {
-                                "id": "color",
+                                "id": "decimals",
+                                "value": 2
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "gradient-gauge"
+                            },
+                            {
+                                "id": "thresholds",
                                 "value": {
-                                    "mode": "fixed",
-                                    "fixedColor": "#FF9830"
+                                    "mode": "percentage",
+                                    "steps": [
+                                        {
+                                            "color": "#73BF69",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#FF9830",
+                                            "value": 60
+                                        },
+                                        {
+                                            "color": "#FF4040",
+                                            "value": 85
+                                        }
+                                    ]
                                 }
                             }
                         ]
@@ -3901,18 +4284,46 @@
                 ]
             },
             "options": {
-                "orientation": "horizontal",
-                "barWidth": 0.7,
-                "groupWidth": 0.7,
-                "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom"
-                },
-                "tooltip": {
-                    "mode": "multi"
-                },
-                "xTickLabelRotation": -45
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "displayName": "VRAM (GPU Memory) Request",
+                        "desc": true
+                    }
+                ],
+                "footer": {
+                    "show": true,
+                    "reducer": [
+                        "sum"
+                    ],
+                    "fields": [
+                        "VRAM (GPU Memory) Request",
+                        "VRAM (GPU Memory) Limit"
+                    ]
+                }
             },
+            "transformations": [
+                {
+                    "id": "merge",
+                    "options": {}
+                },
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true
+                        },
+                        "renameByName": {
+                            "pod": "Pod",
+                            "namespace": "Namespace",
+                            "node": "Node",
+                            "Value #A": "VRAM (GPU Memory) Request",
+                            "Value #B": "VRAM (GPU Memory) Limit"
+                        }
+                    }
+                }
+            ],
             "targets": [
                 {
                     "refId": "A",
@@ -3920,8 +4331,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"}) / 1024",
-                    "legendFormat": "{{pod}} Request",
+                    "expr": "sum by (pod, namespace, node) (DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"}) / 1024",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 },
@@ -3931,8 +4342,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"} + DCGM_FI_DEV_FB_FREE{namespace=~\"$namespace\", node=~\"$node\"}) / 1024",
-                    "legendFormat": "{{pod}} Limit",
+                    "expr": "sum by (pod, namespace, node) (DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"} + DCGM_FI_DEV_FB_FREE{namespace=~\"$namespace\", node=~\"$node\"}) / 1024",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 }
@@ -3941,17 +4352,17 @@
         {
             "id": 42,
             "title": "VRAM (GPU Memory) - SKU Capacity Used",
-            "description": "What percentage of the configured VRAM (GPU Memory) SKU is consumed by pod requests",
+            "description": "% of configured VRAM (GPU Memory) SKU consumed by total pod requests",
             "type": "gauge",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 5,
+                "h": 4,
                 "w": 6,
                 "x": 12,
-                "y": 113
+                "y": 126
             },
             "fieldConfig": {
                 "defaults": {
@@ -4004,17 +4415,17 @@
         {
             "id": 43,
             "title": "VRAM (GPU Memory) - Absolute Totals",
-            "description": "Total VRAM (GPU Memory) requests, limits, and SKU capacity side by side",
+            "description": "Total VRAM (GPU Memory) reserved, limits, and SKU capacity",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 5,
+                "h": 4,
                 "w": 6,
                 "x": 18,
-                "y": 113
+                "y": 126
             },
             "fieldConfig": {
                 "defaults": {
@@ -4083,7 +4494,7 @@
         {
             "id": 44,
             "title": "VRAM (GPU Memory) - Aggregate Reservation and Limits Over Time",
-            "description": "Total VRAM (GPU Memory) requests + limits over time. Red dashed line = SKU capacity threshold.",
+            "description": "Total VRAM (GPU Memory) requests + limits over time. Red dashed = SKU capacity.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -4093,7 +4504,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 118
+                "y": 134
             },
             "fieldConfig": {
                 "defaults": {
@@ -4146,7 +4557,7 @@
                     {
                         "matcher": {
                             "id": "byRegexp",
-                            "options": ".*Request.*"
+                            "options": ".*Request.*|.*Reserved.*"
                         },
                         "properties": [
                             {
@@ -4193,7 +4604,7 @@
                         "uid": "${datasource}"
                     },
                     "expr": "sum(DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"}) / 1024",
-                    "legendFormat": "Total Requests"
+                    "legendFormat": "Total Reserved"
                 },
                 {
                     "refId": "B",
@@ -4218,7 +4629,7 @@
         {
             "id": 45,
             "title": "VRAM (GPU Memory) - Reservation by Node (Stacked)",
-            "description": "How VRAM (GPU Memory) reservations are distributed across nodes. Helps identify hotspots.",
+            "description": "How VRAM (GPU Memory) reservations distribute across nodes. Each color = a node.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -4228,7 +4639,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 118
+                "y": 134
             },
             "fieldConfig": {
                 "defaults": {
@@ -4277,7 +4688,7 @@
         {
             "id": 46,
             "title": "VRAM (GPU Memory) - Per-Pod Actual Usage vs Requests vs Limits",
-            "description": "Solid = actual usage, Dashed = request, Dotted = limit. When solid exceeds dashed, the pod uses more than requested. When solid exceeds dotted, the pod exceeds its limit.",
+            "description": "Solid = actual usage, Dashed = request, Dotted red = limit. When actual exceeds request, the pod is over-consuming vs its reservation.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -4287,7 +4698,7 @@
                 "h": 10,
                 "w": 24,
                 "x": 0,
-                "y": 126
+                "y": 142
             },
             "fieldConfig": {
                 "defaults": {
@@ -4394,7 +4805,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"}) / 1024",
+                    "expr": "sum by (pod, namespace, node) (DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"}) / 1024",
                     "legendFormat": "{{pod}} Actual"
                 },
                 {
@@ -4403,7 +4814,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"} + DCGM_FI_DEV_FB_FREE{namespace=~\"$namespace\", node=~\"$node\"}) / 1024",
+                    "expr": "sum by (pod, namespace, node) (DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"}) / 1024",
                     "legendFormat": "{{pod}} Request"
                 },
                 {
@@ -4412,7 +4823,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"} + DCGM_FI_DEV_FB_FREE{namespace=~\"$namespace\", node=~\"$node\"}) / 1024",
+                    "expr": "sum by (pod, namespace, node) (DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"} + DCGM_FI_DEV_FB_FREE{namespace=~\"$namespace\", node=~\"$node\"}) / 1024",
                     "legendFormat": "{{pod}} Limit"
                 }
             ]
@@ -4420,7 +4831,7 @@
         {
             "id": 47,
             "title": "VRAM (GPU Memory) - Pods Exceeding Allocations",
-            "description": "Pods where actual VRAM (GPU Memory) usage exceeds their request or limit. Positive values mean the pod is consuming more than allocated.",
+            "description": "Pods whose actual VRAM (GPU Memory) usage exceeds their request or limit.",
             "type": "table",
             "datasource": {
                 "type": "prometheus",
@@ -4430,7 +4841,7 @@
                 "h": 6,
                 "w": 24,
                 "x": 0,
-                "y": 136
+                "y": 152
             },
             "fieldConfig": {
                 "defaults": {
@@ -4447,6 +4858,10 @@
                             "options": "Excess Over Request"
                         },
                         "properties": [
+                            {
+                                "id": "decimals",
+                                "value": 2
+                            },
                             {
                                 "id": "custom.displayMode",
                                 "value": "gradient-gauge"
@@ -4479,6 +4894,10 @@
                             "options": "Excess Over Limit"
                         },
                         "properties": [
+                            {
+                                "id": "decimals",
+                                "value": 2
+                            },
                             {
                                 "id": "custom.displayMode",
                                 "value": "gradient-gauge"
@@ -4528,9 +4947,13 @@
                     "id": "organize",
                     "options": {
                         "excludeByName": {
-                            "Time": true
+                            "Time": true,
+                            "__name__": true
                         },
                         "renameByName": {
+                            "pod": "Pod",
+                            "namespace": "Namespace",
+                            "node": "Node",
                             "Value #A": "Excess Over Request",
                             "Value #B": "Excess Over Limit"
                         }
@@ -4544,8 +4967,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "(sum by (pod, namespace, node) (DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"}) / 1024 - sum by (pod, namespace, node) (DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"} + DCGM_FI_DEV_FB_FREE{namespace=~\"$namespace\", node=~\"$node\"}) / 1024) > 0",
-                    "legendFormat": "Excess Over Request",
+                    "expr": "(sum by (pod, namespace, node) (DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"}) / 1024 - sum by (pod, namespace, node) (DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"}) / 1024) > 0",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 },
@@ -4556,7 +4979,7 @@
                         "uid": "${datasource}"
                     },
                     "expr": "(sum by (pod, namespace, node) (DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"}) / 1024 - sum by (pod, namespace, node) (DCGM_FI_DEV_FB_USED{namespace=~\"$namespace\", node=~\"$node\"} + DCGM_FI_DEV_FB_FREE{namespace=~\"$namespace\", node=~\"$node\"}) / 1024) > 0",
-                    "legendFormat": "Excess Over Limit",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 }
@@ -4564,77 +4987,145 @@
         },
         {
             "type": "row",
-            "title": "Local Storage - Resource Analysis",
+            "title": "Local Storage (Ephemeral) - Resource Analysis",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 142
+                "y": 158
             },
             "id": 48,
             "panels": []
         },
         {
             "id": 49,
-            "title": "Local Storage - Requests vs Limits per Pod",
-            "description": "Each pod's Local Storage request (blue) and limit (orange) side by side",
-            "type": "barchart",
+            "title": "Local Storage (Ephemeral) - Request and Limit per Pod",
+            "description": "Each pod's Local Storage (Ephemeral) request and limit shown as gradient gauges. Sorted by highest request. Footer = sum total.",
+            "type": "table",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 10,
+                "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 143
+                "y": 159
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "short",
-                    "decimals": 2,
-                    "color": {
-                        "mode": "palette-classic"
-                    },
                     "custom": {
-                        "lineWidth": 1,
-                        "fillOpacity": 80,
-                        "gradientMode": "scheme",
-                        "axisLabel": "Storage (selected unit)",
-                        "axisSoftMin": 0,
-                        "stacking": {
-                            "mode": "none"
-                        }
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
                     }
                 },
                 "overrides": [
                     {
                         "matcher": {
-                            "id": "byRegexp",
-                            "options": ".*Request.*"
+                            "id": "byName",
+                            "options": "Pod"
                         },
                         "properties": [
                             {
-                                "id": "color",
+                                "id": "custom.width",
+                                "value": 300
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Node"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 200
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Namespace"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 150
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Local Storage (Ephemeral) Request"
+                        },
+                        "properties": [
+                            {
+                                "id": "decimals",
+                                "value": 2
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "gradient-gauge"
+                            },
+                            {
+                                "id": "thresholds",
                                 "value": {
-                                    "mode": "fixed",
-                                    "fixedColor": "#56A64B"
+                                    "mode": "percentage",
+                                    "steps": [
+                                        {
+                                            "color": "#73BF69",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#FF9830",
+                                            "value": 60
+                                        },
+                                        {
+                                            "color": "#FF4040",
+                                            "value": 85
+                                        }
+                                    ]
                                 }
                             }
                         ]
                     },
                     {
                         "matcher": {
-                            "id": "byRegexp",
-                            "options": ".*Limit.*"
+                            "id": "byName",
+                            "options": "Local Storage (Ephemeral) Limit"
                         },
                         "properties": [
                             {
-                                "id": "color",
+                                "id": "decimals",
+                                "value": 2
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "gradient-gauge"
+                            },
+                            {
+                                "id": "thresholds",
                                 "value": {
-                                    "mode": "fixed",
-                                    "fixedColor": "#E02F44"
+                                    "mode": "percentage",
+                                    "steps": [
+                                        {
+                                            "color": "#73BF69",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#FF9830",
+                                            "value": 60
+                                        },
+                                        {
+                                            "color": "#FF4040",
+                                            "value": 85
+                                        }
+                                    ]
                                 }
                             }
                         ]
@@ -4642,18 +5133,46 @@
                 ]
             },
             "options": {
-                "orientation": "horizontal",
-                "barWidth": 0.7,
-                "groupWidth": 0.7,
-                "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom"
-                },
-                "tooltip": {
-                    "mode": "multi"
-                },
-                "xTickLabelRotation": -45
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "displayName": "Local Storage (Ephemeral) Request",
+                        "desc": true
+                    }
+                ],
+                "footer": {
+                    "show": true,
+                    "reducer": [
+                        "sum"
+                    ],
+                    "fields": [
+                        "Local Storage (Ephemeral) Request",
+                        "Local Storage (Ephemeral) Limit"
+                    ]
+                }
             },
+            "transformations": [
+                {
+                    "id": "merge",
+                    "options": {}
+                },
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true
+                        },
+                        "renameByName": {
+                            "pod": "Pod",
+                            "namespace": "Namespace",
+                            "node": "Node",
+                            "Value #A": "Local Storage (Ephemeral) Request",
+                            "Value #B": "Local Storage (Ephemeral) Limit"
+                        }
+                    }
+                }
+            ],
             "targets": [
                 {
                     "refId": "A",
@@ -4661,8 +5180,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"ephemeral-storage\"}) / $storage_unit",
-                    "legendFormat": "{{pod}} Request",
+                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"ephemeral-storage\"}) / $storage_unit",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 },
@@ -4672,8 +5191,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"ephemeral-storage\"}) / $storage_unit",
-                    "legendFormat": "{{pod}} Limit",
+                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"ephemeral-storage\"}) / $storage_unit",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 }
@@ -4681,18 +5200,18 @@
         },
         {
             "id": 50,
-            "title": "Local Storage - SKU Capacity Used",
-            "description": "What percentage of the configured Local Storage SKU is consumed by pod requests",
+            "title": "Local Storage (Ephemeral) - SKU Capacity Used",
+            "description": "% of configured Local Storage (Ephemeral) SKU consumed by total pod requests",
             "type": "gauge",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 5,
+                "h": 4,
                 "w": 6,
                 "x": 12,
-                "y": 143
+                "y": 159
             },
             "fieldConfig": {
                 "defaults": {
@@ -4736,26 +5255,26 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"ephemeral-storage\"}) / $storage_unit / $sku_storage_value",
-                    "legendFormat": "Local Storage",
+                    "expr": "sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"ephemeral-storage\"}) / ($sku_storage_value * $storage_unit)",
+                    "legendFormat": "Local Storage (Ephemeral)",
                     "instant": true
                 }
             ]
         },
         {
             "id": 51,
-            "title": "Local Storage - Absolute Totals",
-            "description": "Total Local Storage requests, limits, and SKU capacity side by side",
+            "title": "Local Storage (Ephemeral) - Absolute Totals",
+            "description": "Total Local Storage (Ephemeral) reserved, limits, and SKU capacity",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 5,
+                "h": 4,
                 "w": 6,
                 "x": 18,
-                "y": 143
+                "y": 159
             },
             "fieldConfig": {
                 "defaults": {
@@ -4823,8 +5342,8 @@
         },
         {
             "id": 52,
-            "title": "Local Storage - Aggregate Reservation and Limits Over Time",
-            "description": "Total Local Storage requests + limits over time. Red dashed line = SKU capacity threshold.",
+            "title": "Local Storage (Ephemeral) - Aggregate Reservation and Limits Over Time",
+            "description": "Total Local Storage (Ephemeral) requests + limits over time. Red dashed = SKU capacity.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -4834,7 +5353,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 148
+                "y": 167
             },
             "fieldConfig": {
                 "defaults": {
@@ -4887,7 +5406,7 @@
                     {
                         "matcher": {
                             "id": "byRegexp",
-                            "options": ".*Request.*"
+                            "options": ".*Request.*|.*Reserved.*"
                         },
                         "properties": [
                             {
@@ -4934,7 +5453,7 @@
                         "uid": "${datasource}"
                     },
                     "expr": "sum(kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"ephemeral-storage\"}) / $storage_unit",
-                    "legendFormat": "Total Requests"
+                    "legendFormat": "Total Reserved"
                 },
                 {
                     "refId": "B",
@@ -4958,8 +5477,8 @@
         },
         {
             "id": 53,
-            "title": "Local Storage - Reservation by Node (Stacked)",
-            "description": "How Local Storage reservations are distributed across nodes. Helps identify hotspots.",
+            "title": "Local Storage (Ephemeral) - Reservation by Node (Stacked)",
+            "description": "How Local Storage (Ephemeral) reservations distribute across nodes. Each color = a node.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -4969,7 +5488,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 148
+                "y": 167
             },
             "fieldConfig": {
                 "defaults": {
@@ -5017,8 +5536,8 @@
         },
         {
             "id": 54,
-            "title": "Local Storage - Per-Pod Actual Usage vs Requests vs Limits",
-            "description": "Solid = actual usage, Dashed = request, Dotted = limit. When solid exceeds dashed, the pod uses more than requested. When solid exceeds dotted, the pod exceeds its limit.",
+            "title": "Local Storage (Ephemeral) - Per-Pod Actual Usage vs Requests vs Limits",
+            "description": "Solid = actual usage, Dashed = request, Dotted red = limit. When actual exceeds request, the pod is over-consuming vs its reservation.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -5028,7 +5547,7 @@
                 "h": 10,
                 "w": 24,
                 "x": 0,
-                "y": 156
+                "y": 175
             },
             "fieldConfig": {
                 "defaults": {
@@ -5135,7 +5654,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (container_fs_usage_bytes{namespace=~\"$namespace\", node=~\"$node\"}) / $storage_unit",
+                    "expr": "sum by (pod, namespace, node) (container_fs_usage_bytes{namespace=~\"$namespace\", node=~\"$node\"}) / $storage_unit",
                     "legendFormat": "{{pod}} Actual"
                 },
                 {
@@ -5144,7 +5663,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"ephemeral-storage\"}) / $storage_unit",
+                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"ephemeral-storage\"}) / $storage_unit",
                     "legendFormat": "{{pod}} Request"
                 },
                 {
@@ -5153,15 +5672,15 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (pod) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"ephemeral-storage\"}) / $storage_unit",
+                    "expr": "sum by (pod, namespace, node) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"ephemeral-storage\"}) / $storage_unit",
                     "legendFormat": "{{pod}} Limit"
                 }
             ]
         },
         {
             "id": 55,
-            "title": "Local Storage - Pods Exceeding Allocations",
-            "description": "Pods where actual Local Storage usage exceeds their request or limit. Positive values mean the pod is consuming more than allocated.",
+            "title": "Local Storage (Ephemeral) - Pods Exceeding Allocations",
+            "description": "Pods whose actual Local Storage (Ephemeral) usage exceeds their request or limit.",
             "type": "table",
             "datasource": {
                 "type": "prometheus",
@@ -5171,7 +5690,7 @@
                 "h": 6,
                 "w": 24,
                 "x": 0,
-                "y": 166
+                "y": 185
             },
             "fieldConfig": {
                 "defaults": {
@@ -5188,6 +5707,10 @@
                             "options": "Excess Over Request"
                         },
                         "properties": [
+                            {
+                                "id": "decimals",
+                                "value": 2
+                            },
                             {
                                 "id": "custom.displayMode",
                                 "value": "gradient-gauge"
@@ -5220,6 +5743,10 @@
                             "options": "Excess Over Limit"
                         },
                         "properties": [
+                            {
+                                "id": "decimals",
+                                "value": 2
+                            },
                             {
                                 "id": "custom.displayMode",
                                 "value": "gradient-gauge"
@@ -5269,9 +5796,13 @@
                     "id": "organize",
                     "options": {
                         "excludeByName": {
-                            "Time": true
+                            "Time": true,
+                            "__name__": true
                         },
                         "renameByName": {
+                            "pod": "Pod",
+                            "namespace": "Namespace",
+                            "node": "Node",
                             "Value #A": "Excess Over Request",
                             "Value #B": "Excess Over Limit"
                         }
@@ -5286,7 +5817,7 @@
                         "uid": "${datasource}"
                     },
                     "expr": "(sum by (pod, namespace, node) (container_fs_usage_bytes{namespace=~\"$namespace\", node=~\"$node\"}) / $storage_unit - sum by (pod, namespace, node) (kube_pod_container_resource_requests{namespace=~\"$namespace\", node=~\"$node\", resource=\"ephemeral-storage\"}) / $storage_unit) > 0",
-                    "legendFormat": "Excess Over Request",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 },
@@ -5297,7 +5828,7 @@
                         "uid": "${datasource}"
                     },
                     "expr": "(sum by (pod, namespace, node) (container_fs_usage_bytes{namespace=~\"$namespace\", node=~\"$node\"}) / $storage_unit - sum by (pod, namespace, node) (kube_pod_container_resource_limits{namespace=~\"$namespace\", node=~\"$node\", resource=\"ephemeral-storage\"}) / $storage_unit) > 0",
-                    "legendFormat": "Excess Over Limit",
+                    "legendFormat": "",
                     "format": "table",
                     "instant": true
                 }
