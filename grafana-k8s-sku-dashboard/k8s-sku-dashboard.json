@@ -1199,7 +1199,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -1231,7 +1231,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -1267,7 +1267,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -1522,7 +1522,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -1558,7 +1558,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -2173,7 +2173,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -2209,7 +2209,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -2379,7 +2379,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -2415,7 +2415,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -3030,7 +3030,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -3066,7 +3066,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -3236,7 +3236,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -3272,7 +3272,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -3887,7 +3887,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -3923,7 +3923,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -4093,7 +4093,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -4129,7 +4129,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -4744,7 +4744,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -4780,7 +4780,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",

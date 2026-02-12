@@ -76,14 +76,14 @@ def heatmap_table(title, desc, gp, req_expr, lim_expr, req_label, lim_label):
                  "properties": [{"id": "custom.width", "value": 150}]},
                 {"matcher": {"id": "byName", "options": req_label},
                  "properties": [{"id": "decimals", "value": 2},
-                    {"id": "custom.displayMode", "value": "gradient-gauge"},
+                    {"id": "custom.displayMode", "value": "lcd-gauge"},
                     {"id": "thresholds", "value": {"mode": "percentage", "steps": [
                         {"color": "#73BF69", "value": None},
                         {"color": "#FF9830", "value": 60},
                         {"color": "#FF4040", "value": 85}]}}]},
                 {"matcher": {"id": "byName", "options": lim_label},
                  "properties": [{"id": "decimals", "value": 2},
-                    {"id": "custom.displayMode", "value": "gradient-gauge"},
+                    {"id": "custom.displayMode", "value": "lcd-gauge"},
                     {"id": "thresholds", "value": {"mode": "percentage", "steps": [
                         {"color": "#73BF69", "value": None},
                         {"color": "#FF9830", "value": 60},
@@ -184,14 +184,14 @@ def abusing_table(title, desc, gp, usage_expr, req_expr, lim_expr):
             "overrides": [
                 {"matcher": {"id": "byName", "options": "Excess Over Request"},
                  "properties": [{"id": "decimals", "value": 2},
-                    {"id": "custom.displayMode", "value": "gradient-gauge"},
+                    {"id": "custom.displayMode", "value": "lcd-gauge"},
                     {"id": "thresholds", "value": {"mode": "absolute", "steps": [
                         {"color": "#73BF69", "value": None},
                         {"color": "#FF9830", "value": 0.01},
                         {"color": "#FF4040", "value": 1}]}}]},
                 {"matcher": {"id": "byName", "options": "Excess Over Limit"},
                  "properties": [{"id": "decimals", "value": 2},
-                    {"id": "custom.displayMode", "value": "gradient-gauge"},
+                    {"id": "custom.displayMode", "value": "lcd-gauge"},
                     {"id": "thresholds", "value": {"mode": "absolute", "steps": [
                         {"color": "#73BF69", "value": None},
                         {"color": "#FF9830", "value": 0.01},
@@ -414,15 +414,15 @@ def build():
                 {"matcher": {"id": "byName", "options": "Namespace"}, "properties": [{"id": "custom.width", "value": 140}]},
                 {"matcher": {"id": "byName", "options": "Node"}, "properties": [{"id": "custom.width", "value": 180}]},
                 {"matcher": {"id": "byRegexp", "options": "GPU.*"},
-                 "properties": [{"id": "decimals", "value": 0}, {"id": "custom.displayMode", "value": "gradient-gauge"},
+                 "properties": [{"id": "decimals", "value": 0}, {"id": "custom.displayMode", "value": "lcd-gauge"},
                     {"id": "thresholds", "value": {"mode": "absolute", "steps": [
                         {"color": "#73BF69", "value": None}, {"color": "#FF4040", "value": 1}]}}]},
                 {"matcher": {"id": "byRegexp", "options": "vCPU.*"},
-                 "properties": [{"id": "decimals", "value": 2}, {"id": "custom.displayMode", "value": "gradient-gauge"},
+                 "properties": [{"id": "decimals", "value": 2}, {"id": "custom.displayMode", "value": "lcd-gauge"},
                     {"id": "thresholds", "value": {"mode": "absolute", "steps": [
                         {"color": "#73BF69", "value": None}, {"color": "#FF9830", "value": 4}, {"color": "#FF4040", "value": 8}]}}]},
                 {"matcher": {"id": "byRegexp", "options": "Mem.*|Eph.*"},
-                 "properties": [{"id": "decimals", "value": 2}, {"id": "custom.displayMode", "value": "gradient-gauge"},
+                 "properties": [{"id": "decimals", "value": 2}, {"id": "custom.displayMode", "value": "lcd-gauge"},
                     {"id": "thresholds", "value": {"mode": "absolute", "steps": [
                         {"color": "#73BF69", "value": None}, {"color": "#FF9830", "value": 64}, {"color": "#FF4040", "value": 128}]}}]},
             ]},

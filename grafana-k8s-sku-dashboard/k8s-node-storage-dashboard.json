@@ -188,7 +188,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "count(kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Running\"} == 1 * on(pod, namespace) group_left() (kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"} * 0 + 1))",
+                    "expr": "count((kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Running\"} == 1) and on(pod, namespace) kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"})",
                     "legendFormat": "Running Pods"
                 },
                 {
@@ -197,7 +197,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "count(kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Pending\"} == 1 * on(pod, namespace) group_left() (kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"} * 0 + 1))",
+                    "expr": "count((kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Pending\"} == 1) and on(pod, namespace) kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"})",
                     "legendFormat": "Pending Pods"
                 },
                 {
@@ -206,7 +206,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "count(kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Failed\"} == 1 * on(pod, namespace) group_left() (kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"} * 0 + 1))",
+                    "expr": "count((kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Failed\"} == 1) and on(pod, namespace) kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"})",
                     "legendFormat": "Failed Pods"
                 }
             ]
@@ -440,7 +440,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "kube_pod_status_phase{namespace=~\"$namespace\"} == 1 * on(pod, namespace) group_left(node) kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"}",
+                    "expr": "(kube_pod_status_phase{namespace=~\"$namespace\"} == 1) * on(pod, namespace) group_left(node) kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"}",
                     "legendFormat": "",
                     "format": "table",
                     "instant": true
@@ -501,7 +501,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "count(kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Succeeded\"} == 1 * on(pod, namespace) group_left() (kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"} * 0 + 1)) or vector(0)",
+                    "expr": "count((kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Succeeded\"} == 1) and on(pod, namespace) kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"}) or vector(0)",
                     "legendFormat": "Succeeded Pods"
                 },
                 {
@@ -510,7 +510,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "count(kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Failed\"} == 1 * on(pod, namespace) group_left() (kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"} * 0 + 1)) or vector(0)",
+                    "expr": "count((kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Failed\"} == 1) and on(pod, namespace) kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"}) or vector(0)",
                     "legendFormat": "Failed Pods"
                 },
                 {
@@ -519,7 +519,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "count(kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Unknown\"} == 1 * on(pod, namespace) group_left() (kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"} * 0 + 1)) or vector(0)",
+                    "expr": "count((kube_pod_status_phase{namespace=~\"$namespace\", phase=\"Unknown\"} == 1) and on(pod, namespace) kube_pod_info{namespace=~\"$namespace\", node=~\"$node\"}) or vector(0)",
                     "legendFormat": "Unknown Phase"
                 }
             ]
@@ -881,7 +881,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -1812,7 +1812,7 @@
                         "properties": [
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
@@ -2237,7 +2237,7 @@
                             },
                             {
                                 "id": "custom.displayMode",
-                                "value": "gradient-gauge"
+                                "value": "lcd-gauge"
                             },
                             {
                                 "id": "thresholds",
