@@ -15,16 +15,16 @@
         }
     ],
     "id": null,
-    "uid": "k8s-pod-details-v1",
-    "title": "K8s Pod Details & Scheduler Metrics",
-    "description": "Rich pod information: phases, errors, container status, scheduling latency, API server health, etcd backend. All filtered by namespace.",
+    "uid": "k8s-pod-details-v2",
+    "title": "K8s Pod Details & Scheduling",
+    "description": "Rich pod information: phases, start/deletion times, errors, kill reasons, scheduling delay, readiness, restarts. Filtered by namespace.",
     "tags": [
         "kubernetes",
         "pods",
         "scheduler",
-        "api-server",
         "errors",
-        "phases"
+        "phases",
+        "lifecycle"
     ],
     "style": "dark",
     "timezone": "browser",
@@ -34,7 +34,7 @@
     "liveNow": false,
     "refresh": "30s",
     "schemaVersion": 38,
-    "version": 1,
+    "version": 2,
     "time": {
         "from": "now-6h",
         "to": "now"
@@ -358,7 +358,7 @@
             },
             "gridPos": {
                 "h": 3,
-                "w": 8,
+                "w": 4,
                 "x": 16,
                 "y": 1
             },
@@ -408,8 +408,67 @@
         },
         {
             "id": 7,
+            "title": "Total Pods",
+            "description": "Total pod count across all phases",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 3,
+                "w": 4,
+                "x": 20,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#5794F2",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": []
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "value",
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "count(kube_pod_info{namespace=~\"$namespace\"}) or vector(0)",
+                    "legendFormat": "Total",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 8,
             "title": "Pods by Phase Over Time",
-            "description": "One query, split by phase label. Shows the distribution of all pod phases over time. Each color = a phase (Running, Pending, Succeeded, Failed, Unknown).",
+            "description": "Single query split by phase label. Each color = a phase. Height = total pod count.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -441,7 +500,7 @@
             "options": {
                 "legend": {
                     "displayMode": "table",
-                    "placement": "right",
+                    "placement": "bottom",
                     "calcs": [
                         "min",
                         "max",
@@ -468,7 +527,7 @@
         },
         {
             "type": "row",
-            "title": "All Pods \u2014 Rich Details",
+            "title": "All Pods \u2014 Start Time, Deletion Time, Uptime, Restarts",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
@@ -476,20 +535,20 @@
                 "x": 0,
                 "y": 12
             },
-            "id": 8,
+            "id": 9,
             "panels": []
         },
         {
-            "id": 9,
-            "title": "All Pods \u2014 Name, Namespace, Start Time, Uptime, Restarts",
-            "description": "Every pod with rich details. Start time is in ISO format (kube_pod_start_time * 1000). Restarts = total container restart count. Sorted by most recently started.",
+            "id": 10,
+            "title": "All Pods \u2014 Full Lifecycle Table",
+            "description": "Every pod with: Start Time (ISO), Deletion Time (if being deleted/terminated), Uptime (duration since start), Total Restarts. Deletion Time appears when a pod is being terminated or has been deleted. If Deletion Time is empty, the pod is still active.",
             "type": "table",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 12,
+                "h": 14,
                 "w": 24,
                 "x": 0,
                 "y": 13
@@ -536,6 +595,34 @@
                             {
                                 "id": "unit",
                                 "value": "dateTimeAsIso"
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Deleted At"
+                        },
+                        "properties": [
+                            {
+                                "id": "unit",
+                                "value": "dateTimeAsIso"
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "color-text"
+                            },
+                            {
+                                "id": "thresholds",
+                                "value": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {
+                                            "color": "#FF4040",
+                                            "value": null
+                                        }
+                                    ]
+                                }
                             }
                         ]
                     },
@@ -630,7 +717,8 @@
                             "namespace": "Namespace",
                             "Value #A": "Started At",
                             "Value #B": "Uptime",
-                            "Value #C": "Total Restarts"
+                            "Value #C": "Deleted At",
+                            "Value #D": "Total Restarts"
                         }
                     }
                 }
@@ -664,6 +752,17 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
+                    "expr": "kube_pod_deletion_timestamp{namespace=~\"$namespace\"} * 1000",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                },
+                {
+                    "refId": "D",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
                     "expr": "sum by (pod, namespace) (kube_pod_container_status_restarts_total{namespace=~\"$namespace\"})",
                     "legendFormat": "",
                     "format": "table",
@@ -673,21 +772,21 @@
         },
         {
             "type": "row",
-            "title": "Container Status \u2014 Errors, Waiting, Terminated",
+            "title": "Pod Errors \u2014 Why Pods Fail, Get Killed, or Get Stuck",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 25
+                "y": 27
             },
-            "id": 10,
+            "id": 11,
             "panels": []
         },
         {
-            "id": 11,
-            "title": "Containers Waiting (by Reason)",
-            "description": "Containers in Waiting state. Common reasons: CrashLoopBackOff, ImagePullBackOff, ErrImagePull, CreateContainerConfigError. Each line = a reason.",
+            "id": 12,
+            "title": "Containers Stuck in Waiting State (by Reason)",
+            "description": "Containers that are NOT running \u2014 stuck waiting. CrashLoopBackOff = container keeps crashing and K8s is backing off restarts. ImagePullBackOff = cannot pull container image. CreateContainerConfigError = bad config (missing secret/configmap). ErrImagePull = image doesn't exist or no auth.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -697,7 +796,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 26
+                "y": 28
             },
             "fieldConfig": {
                 "defaults": {
@@ -706,7 +805,7 @@
                         "lineWidth": 2,
                         "fillOpacity": 15,
                         "gradientMode": "none",
-                        "axisLabel": "Containers",
+                        "axisLabel": "Containers Waiting",
                         "drawStyle": "line",
                         "pointSize": 5,
                         "showPoints": "auto",
@@ -744,9 +843,9 @@
             ]
         },
         {
-            "id": 12,
-            "title": "Containers Terminated (by Reason)",
-            "description": "Containers that were terminated. Reasons: OOMKilled, Error, Completed, ContainerCannotRun, DeadlineExceeded. Spikes indicate problems.",
+            "id": 13,
+            "title": "Containers Killed or Terminated (by Reason)",
+            "description": "Containers that were forcefully stopped. OOMKilled = ran out of memory, K8s killed it. Error = container exited with non-zero code (application crash). Completed = finished normally (for Jobs). ContainerCannotRun = runtime error starting container. DeadlineExceeded = Job exceeded activeDeadlineSeconds.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -756,7 +855,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 26
+                "y": 28
             },
             "fieldConfig": {
                 "defaults": {
@@ -765,7 +864,7 @@
                         "lineWidth": 2,
                         "fillOpacity": 15,
                         "gradientMode": "none",
-                        "axisLabel": "Containers",
+                        "axisLabel": "Containers Terminated",
                         "drawStyle": "line",
                         "pointSize": 5,
                         "showPoints": "auto",
@@ -803,9 +902,9 @@
             ]
         },
         {
-            "id": 13,
-            "title": "Pods with Container Errors \u2014 Waiting Reasons",
-            "description": "Pods that have containers currently in Waiting state. Shows the reason. Filter to see which specific pods are stuck and why.",
+            "id": 14,
+            "title": "Which Pods Are Stuck Right Now \u2014 Waiting Reasons",
+            "description": "List of pods with containers currently in Waiting state. These pods are NOT running. The Reason column tells you exactly why.",
             "type": "table",
             "datasource": {
                 "type": "prometheus",
@@ -815,7 +914,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 34
+                "y": 36
             },
             "fieldConfig": {
                 "defaults": {
@@ -834,130 +933,14 @@
                         "properties": [
                             {
                                 "id": "custom.width",
-                                "value": 280
+                                "value": 260
                             }
                         ]
                     },
                     {
                         "matcher": {
                             "id": "byName",
-                            "options": "Waiting Reason"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.displayMode",
-                                "value": "color-text"
-                            },
-                            {
-                                "id": "thresholds",
-                                "value": {
-                                    "mode": "absolute",
-                                    "steps": [
-                                        {
-                                            "color": "#FF4040",
-                                            "value": null
-                                        }
-                                    ]
-                                }
-                            }
-                        ]
-                    }
-                ]
-            },
-            "options": {
-                "showHeader": true,
-                "sortBy": [
-                    {
-                        "displayName": "Waiting Reason",
-                        "desc": false
-                    }
-                ],
-                "footer": {
-                    "show": false,
-                    "reducer": [
-                        "sum"
-                    ],
-                    "fields": []
-                }
-            },
-            "transformations": [
-                {
-                    "id": "organize",
-                    "options": {
-                        "excludeByName": {
-                            "Time": true,
-                            "__name__": true,
-                            "uid": true,
-                            "job": true,
-                            "instance": true,
-                            "service": true,
-                            "endpoint": true,
-                            "prometheus": true,
-                            "Value": true
-                        },
-                        "renameByName": {
-                            "pod": "Pod",
-                            "namespace": "Namespace",
-                            "container": "Container",
-                            "reason": "Waiting Reason"
-                        }
-                    }
-                }
-            ],
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "kube_pod_container_status_waiting_reason{namespace=~\"$namespace\"} == 1",
-                    "legendFormat": "",
-                    "format": "table",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 14,
-            "title": "Pods \u2014 Last Terminated Reason",
-            "description": "Shows the most recent termination reason for each container. OOMKilled means the container ran out of memory. Error means it exited non-zero.",
-            "type": "table",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 34
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "custom": {
-                        "align": "auto",
-                        "displayMode": "auto",
-                        "filterable": true
-                    }
-                },
-                "overrides": [
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "Pod"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.width",
-                                "value": 280
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "Last Terminated Reason"
+                            "options": "Why It Is Stuck"
                         },
                         "properties": [
                             {
@@ -1010,7 +993,118 @@
                             "pod": "Pod",
                             "namespace": "Namespace",
                             "container": "Container",
-                            "reason": "Last Terminated Reason"
+                            "reason": "Why It Is Stuck"
+                        }
+                    }
+                }
+            ],
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "kube_pod_container_status_waiting_reason{namespace=~\"$namespace\"} == 1",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 15,
+            "title": "Last Kill/Termination Reason per Container",
+            "description": "For each container, why it was LAST killed or terminated. OOMKilled = not enough memory limit. Error = app crashed. This persists even after restart so you can see the cause.",
+            "type": "table",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 36
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Pod"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 260
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Kill Reason"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.displayMode",
+                                "value": "color-text"
+                            },
+                            {
+                                "id": "thresholds",
+                                "value": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {
+                                            "color": "#FF4040",
+                                            "value": null
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "showHeader": true,
+                "sortBy": [],
+                "footer": {
+                    "show": false,
+                    "reducer": [
+                        "sum"
+                    ],
+                    "fields": []
+                }
+            },
+            "transformations": [
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true,
+                            "uid": true,
+                            "job": true,
+                            "instance": true,
+                            "service": true,
+                            "endpoint": true,
+                            "prometheus": true,
+                            "Value": true
+                        },
+                        "renameByName": {
+                            "pod": "Pod",
+                            "namespace": "Namespace",
+                            "container": "Container",
+                            "reason": "Kill Reason"
                         }
                     }
                 }
@@ -1030,127 +1124,9 @@
             ]
         },
         {
-            "id": 15,
-            "title": "Container Restarts per Pod Over Time",
-            "description": "Total restart count per pod. A continuously rising line = crash loop. Flat line = stable. Each line = a pod.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 42
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Restart Count",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum by (pod) (kube_pod_container_status_restarts_total{namespace=~\"$namespace\"})",
-                    "legendFormat": "{{pod}}"
-                }
-            ]
-        },
-        {
             "id": 16,
-            "title": "Container Restart Rate per Pod",
-            "description": "Rate of restarts (restarts/sec). Spikes indicate crash loops or OOMKills. Sustained rate > 0 = pod is cycling.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 42
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Restarts/sec",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum by (pod) (rate(kube_pod_container_status_restarts_total{namespace=~\"$namespace\"}[5m]))",
-                    "legendFormat": "{{pod}}"
-                }
-            ]
-        },
-        {
-            "id": 17,
-            "title": "Pod Status Reasons (Evicted, NodeLost, etc.)",
-            "description": "Pods with a status reason set. Evicted = pod was evicted (disk pressure, memory pressure). NodeLost = node became unreachable.",
+            "title": "Pod-Level Status Reasons Over Time",
+            "description": "Pods with a special status reason: Evicted = pod was evicted by kubelet (disk pressure, memory pressure, PID pressure). NodeLost = node became unreachable. UnexpectedAdmissionError = admission webhook error.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1160,7 +1136,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 50
+                "y": 44
             },
             "fieldConfig": {
                 "defaults": {
@@ -1207,9 +1183,9 @@
             ]
         },
         {
-            "id": 18,
-            "title": "Pods Not Ready Over Time",
-            "description": "Count of pods where readiness probe is failing. These pods exist but are not receiving traffic through Services.",
+            "id": 17,
+            "title": "Pod Readiness Over Time",
+            "description": "Ready = pod passes readiness probe, receiving traffic. Not Ready = pod exists but is NOT receiving traffic (failing readiness probe). High 'Not Ready' count = service degradation.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1219,7 +1195,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 50
+                "y": 44
             },
             "fieldConfig": {
                 "defaults": {
@@ -1256,41 +1232,41 @@
             "targets": [
                 {
                     "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "count(kube_pod_status_ready{namespace=~\"$namespace\", condition=\"false\"} == 1) or vector(0)",
-                    "legendFormat": "Not Ready"
-                },
-                {
-                    "refId": "B",
                     "datasource": {
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
                     "expr": "count(kube_pod_status_ready{namespace=~\"$namespace\", condition=\"true\"} == 1) or vector(0)",
                     "legendFormat": "Ready"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "count(kube_pod_status_ready{namespace=~\"$namespace\", condition=\"false\"} == 1) or vector(0)",
+                    "legendFormat": "Not Ready"
                 }
             ]
         },
         {
             "type": "row",
-            "title": "Pod Scheduling \u2014 Latency, Attempts, Queue Depth",
+            "title": "Restart Analysis \u2014 Crash Loops & OOMKills",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 58
+                "y": 52
             },
-            "id": 19,
+            "id": 18,
             "panels": []
         },
         {
-            "id": 20,
-            "title": "Scheduler Attempts (by Result)",
-            "description": "How many scheduling attempts per second and whether they succeeded. result=scheduled: pod was placed. result=unschedulable: no node fits. result=error: scheduler internal error.",
+            "id": 19,
+            "title": "Total Restarts per Pod (cumulative)",
+            "description": "Cumulative restart count over time. A steep rising line = active crash loop. Flat line = stable pod. Each line = one pod.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1300,7 +1276,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 59
+                "y": 53
             },
             "fieldConfig": {
                 "defaults": {
@@ -1309,7 +1285,7 @@
                         "lineWidth": 2,
                         "fillOpacity": 15,
                         "gradientMode": "none",
-                        "axisLabel": "Attempts/sec",
+                        "axisLabel": "Restart Count",
                         "drawStyle": "line",
                         "pointSize": 5,
                         "showPoints": "auto",
@@ -1341,15 +1317,15 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum by (result) (rate(scheduler_schedule_attempts_total[5m]))",
-                    "legendFormat": "{{result}}"
+                    "expr": "sum by (pod) (kube_pod_container_status_restarts_total{namespace=~\"$namespace\"})",
+                    "legendFormat": "{{pod}}"
                 }
             ]
         },
         {
-            "id": 21,
-            "title": "Pods Pending in Scheduler Queue",
-            "description": "Number of pods waiting in the scheduler queue. queue=unschedulable: pods that failed and are waiting for retry. queue=backoff: pods in exponential backoff. queue=active: pods ready for scheduling attempt.",
+            "id": 20,
+            "title": "Restart Rate per Pod (restarts/sec)",
+            "description": "Rate of restarts. Any sustained rate > 0 means the pod is actively cycling. Spikes indicate sudden failures (OOMKill, crash).",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1359,7 +1335,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 59
+                "y": 53
             },
             "fieldConfig": {
                 "defaults": {
@@ -1368,7 +1344,7 @@
                         "lineWidth": 2,
                         "fillOpacity": 15,
                         "gradientMode": "none",
-                        "axisLabel": "Pending Pods",
+                        "axisLabel": "Restarts/sec",
                         "drawStyle": "line",
                         "pointSize": 5,
                         "showPoints": "auto",
@@ -1400,36 +1376,49 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "scheduler_pending_pods",
-                    "legendFormat": "{{queue}}"
+                    "expr": "sum by (pod) (rate(kube_pod_container_status_restarts_total{namespace=~\"$namespace\"}[5m]))",
+                    "legendFormat": "{{pod}}"
                 }
             ]
         },
         {
+            "type": "row",
+            "title": "Pod Scheduling \u2014 Time to Schedule (from kube-state-metrics)",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 61
+            },
+            "id": 21,
+            "panels": []
+        },
+        {
             "id": 22,
-            "title": "End-to-End Scheduling Latency (p50, p90, p99)",
-            "description": "Time from pod entering the scheduler queue to being bound to a node. p99 > 1s indicates scheduler is struggling. High latency = not enough resources or complex scheduling constraints.",
+            "title": "Time from Pod Creation to Running (scheduling + startup delay)",
+            "description": "kube_pod_start_time - kube_pod_created = total time from when the pod object was created in the API until the first container started running. This includes: scheduler queue wait + scheduling decision + image pull + init containers. High values = scheduling delays, slow image pulls, or resource pressure.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 8,
-                "w": 12,
+                "h": 10,
+                "w": 24,
                 "x": 0,
-                "y": 67
+                "y": 62
             },
             "fieldConfig": {
                 "defaults": {
                     "unit": "s",
                     "custom": {
                         "lineWidth": 2,
-                        "fillOpacity": 20,
+                        "fillOpacity": 15,
                         "gradientMode": "none",
-                        "axisLabel": "Latency",
+                        "axisLabel": "Seconds to Start",
                         "drawStyle": "line",
-                        "pointSize": 4,
+                        "pointSize": 5,
                         "showPoints": "auto",
                         "spanNulls": true
                     }
@@ -1439,7 +1428,7 @@
             "options": {
                 "legend": {
                     "displayMode": "table",
-                    "placement": "bottom",
+                    "placement": "right",
                     "calcs": [
                         "min",
                         "max",
@@ -1459,473 +1448,25 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "histogram_quantile(0.50, sum by (le) (rate(scheduler_e2e_scheduling_duration_seconds_bucket[5m])))",
-                    "legendFormat": "p50"
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "histogram_quantile(0.90, sum by (le) (rate(scheduler_e2e_scheduling_duration_seconds_bucket[5m])))",
-                    "legendFormat": "p90"
-                },
-                {
-                    "refId": "C",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "histogram_quantile(0.99, sum by (le) (rate(scheduler_e2e_scheduling_duration_seconds_bucket[5m])))",
-                    "legendFormat": "p99"
+                    "expr": "(kube_pod_start_time{namespace=~\"$namespace\"} - kube_pod_created{namespace=~\"$namespace\"}) > 0",
+                    "legendFormat": "{{pod}}"
                 }
             ]
         },
         {
             "id": 23,
-            "title": "Scheduling Algorithm Duration (p50, p90, p99)",
-            "description": "Time the scheduling algorithm itself takes (filtering + scoring nodes). Does not include queue wait time. High values = too many nodes or complex predicates.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 67
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "s",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 20,
-                        "gradientMode": "none",
-                        "axisLabel": "Duration",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "bottom",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "histogram_quantile(0.50, sum by (le) (rate(scheduler_scheduling_attempt_duration_seconds_bucket{result=\"scheduled\"}[5m])))",
-                    "legendFormat": "p50 (scheduled)"
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "histogram_quantile(0.90, sum by (le) (rate(scheduler_scheduling_attempt_duration_seconds_bucket{result=\"scheduled\"}[5m])))",
-                    "legendFormat": "p90 (scheduled)"
-                },
-                {
-                    "refId": "C",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "histogram_quantile(0.99, sum by (le) (rate(scheduler_scheduling_attempt_duration_seconds_bucket{result=\"scheduled\"}[5m])))",
-                    "legendFormat": "p99 (scheduled)"
-                },
-                {
-                    "refId": "D",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "histogram_quantile(0.99, sum by (le) (rate(scheduler_scheduling_attempt_duration_seconds_bucket{result=\"unschedulable\"}[5m])))",
-                    "legendFormat": "p99 (unschedulable)"
-                }
-            ]
-        },
-        {
-            "id": 24,
-            "title": "Pods Scheduled vs Unschedulable (rate)",
-            "description": "Rate at which pods are being successfully scheduled vs failing. A rising unschedulable rate means the cluster is running out of capacity.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 75
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Rate",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "rate(scheduler_schedule_attempts_total{result=\"scheduled\"}[5m])",
-                    "legendFormat": "Scheduled/sec"
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "rate(scheduler_schedule_attempts_total{result=\"unschedulable\"}[5m])",
-                    "legendFormat": "Unschedulable/sec"
-                },
-                {
-                    "refId": "C",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "rate(scheduler_schedule_attempts_total{result=\"error\"}[5m])",
-                    "legendFormat": "Error/sec"
-                }
-            ]
-        },
-        {
-            "id": 25,
-            "title": "Scheduler Preemption Attempts",
-            "description": "Rate of preemption attempts. Preemption = evicting lower-priority pods to make room for higher-priority ones. Frequent preemption indicates resource pressure.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 75
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Rate",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "rate(scheduler_preemption_attempts_total[5m])",
-                    "legendFormat": "Preemption Attempts/sec"
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(rate(scheduler_preemption_victims[5m]))",
-                    "legendFormat": "Preemption Victims/sec"
-                }
-            ]
-        },
-        {
-            "id": 26,
-            "title": "Scheduler Plugin Duration by Extension Point",
-            "description": "Time each scheduler plugin takes at each extension point (Filter, Score, PreFilter, etc.). Helps identify slow scheduler plugins.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 24,
-                "x": 0,
-                "y": 83
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "s",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Duration",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "histogram_quantile(0.99, sum by (extension_point, le) (rate(scheduler_framework_extension_point_duration_seconds_bucket[5m])))",
-                    "legendFormat": "p99 {{extension_point}}"
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "Pods Not Scheduling \u2014 Diagnostics",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 91
-            },
-            "id": 27,
-            "panels": []
-        },
-        {
-            "id": 28,
-            "title": "Unschedulable Pods Count",
-            "description": "Pods that cannot be scheduled. kube_pod_status_unschedulable shows pods whose PodScheduled condition is False. These are stuck in Pending.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 92
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Pods",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "count(kube_pod_status_scheduled{namespace=~\"$namespace\", condition=\"false\"} == 1) or vector(0)",
-                    "legendFormat": "Unscheduled Pods"
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "count(kube_pod_status_scheduled{namespace=~\"$namespace\", condition=\"true\"} == 1) or vector(0)",
-                    "legendFormat": "Scheduled Pods"
-                }
-            ]
-        },
-        {
-            "id": 29,
-            "title": "Incoming Pods to Scheduler Queue",
-            "description": "Rate of pods entering the scheduler queue. Spikes = large-scale deployments or scaling events.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 92
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Pods/sec",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum by (event) (rate(scheduler_queue_incoming_pods_total[5m]))",
-                    "legendFormat": "{{event}}"
-                }
-            ]
-        },
-        {
-            "id": 30,
-            "title": "Currently Unscheduled Pods",
-            "description": "Pods where PodScheduled condition is False. These are in Pending state waiting for a node. Check Events in kubectl for the specific reason.",
+            "title": "Pods by Scheduling Delay (longest first)",
+            "description": "How long each pod took from creation to first container start. Created At = when API received the pod spec. Started At = when first container ran. Delay = the gap (scheduling + image pull + init). Sort by Delay to find pods that took unusually long.",
             "type": "table",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 8,
+                "h": 10,
                 "w": 24,
                 "x": 0,
-                "y": 100
+                "y": 72
             },
             "fieldConfig": {
                 "defaults": {
@@ -1944,7 +1485,7 @@
                         "properties": [
                             {
                                 "id": "custom.width",
-                                "value": 400
+                                "value": 320
                             }
                         ]
                     },
@@ -1956,7 +1497,71 @@
                         "properties": [
                             {
                                 "id": "custom.width",
-                                "value": 180
+                                "value": 150
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Created At"
+                        },
+                        "properties": [
+                            {
+                                "id": "unit",
+                                "value": "dateTimeAsIso"
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Started At"
+                        },
+                        "properties": [
+                            {
+                                "id": "unit",
+                                "value": "dateTimeAsIso"
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Delay (seconds)"
+                        },
+                        "properties": [
+                            {
+                                "id": "unit",
+                                "value": "s"
+                            },
+                            {
+                                "id": "decimals",
+                                "value": 1
+                            },
+                            {
+                                "id": "thresholds",
+                                "value": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {
+                                            "color": "#73BF69",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#FF9830",
+                                            "value": 30
+                                        },
+                                        {
+                                            "color": "#FF4040",
+                                            "value": 120
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "lcd-gauge"
                             }
                         ]
                     }
@@ -1966,10 +1571,193 @@
                 "showHeader": true,
                 "sortBy": [
                     {
-                        "displayName": "Pod",
-                        "desc": false
+                        "displayName": "Delay (seconds)",
+                        "desc": true
                     }
                 ],
+                "footer": {
+                    "show": false,
+                    "reducer": [
+                        "sum"
+                    ],
+                    "fields": []
+                }
+            },
+            "transformations": [
+                {
+                    "id": "merge",
+                    "options": {}
+                },
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true,
+                            "uid": true,
+                            "job": true,
+                            "instance": true,
+                            "service": true,
+                            "container": true,
+                            "endpoint": true,
+                            "prometheus": true,
+                            "node": true
+                        },
+                        "renameByName": {
+                            "pod": "Pod",
+                            "namespace": "Namespace",
+                            "Value #A": "Created At",
+                            "Value #B": "Started At",
+                            "Value #C": "Delay (seconds)"
+                        }
+                    }
+                }
+            ],
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "kube_pod_created{namespace=~\"$namespace\"} * 1000",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "kube_pod_start_time{namespace=~\"$namespace\"} * 1000",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                },
+                {
+                    "refId": "C",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "kube_pod_start_time{namespace=~\"$namespace\"} - kube_pod_created{namespace=~\"$namespace\"}",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 24,
+            "title": "Pods Scheduled vs Not Scheduled",
+            "description": "kube_pod_status_scheduled: condition=true means scheduler found a node. condition=false means no node is available (insufficient resources, taints/tolerations, node selectors, affinity rules).",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 82
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 15,
+                        "gradientMode": "none",
+                        "axisLabel": "Pods",
+                        "drawStyle": "line",
+                        "pointSize": 5,
+                        "showPoints": "auto",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "count(kube_pod_status_scheduled{namespace=~\"$namespace\", condition=\"true\"} == 1) or vector(0)",
+                    "legendFormat": "Scheduled"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "count(kube_pod_status_scheduled{namespace=~\"$namespace\", condition=\"false\"} == 1) or vector(0)",
+                    "legendFormat": "Not Scheduled (no node fits)"
+                }
+            ]
+        },
+        {
+            "id": 25,
+            "title": "Currently Unscheduled Pods (waiting for a node)",
+            "description": "Pods where PodScheduled condition is False. These are stuck in Pending. Common reasons: insufficient CPU/memory/GPU, no matching node (taints, selectors), PVC not bound. Check Events via: kubectl describe pod <name>",
+            "type": "table",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 82
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Pod"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 350
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "showHeader": true,
+                "sortBy": [],
                 "footer": {
                     "show": false,
                     "reducer": [
@@ -2012,463 +1800,6 @@
                     "legendFormat": "",
                     "format": "table",
                     "instant": true
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "API Server Health",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 108
-            },
-            "id": 31,
-            "panels": []
-        },
-        {
-            "id": 32,
-            "title": "API Server Request Rate (by verb)",
-            "description": "Rate of API requests by HTTP verb (GET, LIST, WATCH, CREATE, UPDATE, DELETE, PATCH). High LIST/WATCH rates are normal. Spikes in CREATE/DELETE = deployment activity.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 109
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Requests/sec",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum by (verb) (rate(apiserver_request_total[5m]))",
-                    "legendFormat": "{{verb}}"
-                }
-            ]
-        },
-        {
-            "id": 33,
-            "title": "API Server Errors (4xx, 5xx)",
-            "description": "Rate of API errors by response code. 409=conflict (normal during updates), 429=throttled, 500+=server errors (bad). Filter: only error codes shown.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 109
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Errors/sec",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum by (code) (rate(apiserver_request_total{code=~\"[45]..\"}[5m]))",
-                    "legendFormat": "HTTP {{code}}"
-                }
-            ]
-        },
-        {
-            "id": 34,
-            "title": "API Server Request Latency (p50, p90, p99)",
-            "description": "Time the API server takes to respond. p99 > 1s = overloaded API server or etcd. Verbs like LIST are naturally slower than GET.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 117
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "s",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 20,
-                        "gradientMode": "none",
-                        "axisLabel": "Latency",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "bottom",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "histogram_quantile(0.50, sum by (le) (rate(apiserver_request_duration_seconds_bucket{verb!=\"WATCH\"}[5m])))",
-                    "legendFormat": "p50"
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "histogram_quantile(0.90, sum by (le) (rate(apiserver_request_duration_seconds_bucket{verb!=\"WATCH\"}[5m])))",
-                    "legendFormat": "p90"
-                },
-                {
-                    "refId": "C",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "histogram_quantile(0.99, sum by (le) (rate(apiserver_request_duration_seconds_bucket{verb!=\"WATCH\"}[5m])))",
-                    "legendFormat": "p99"
-                }
-            ]
-        },
-        {
-            "id": 35,
-            "title": "API Server Inflight Requests",
-            "description": "Currently in-flight requests to the API server. mutating = write operations, readOnly = read operations. High inflight = API server under pressure.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 117
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Inflight",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "apiserver_current_inflight_requests",
-                    "legendFormat": "{{requestKind}}"
-                }
-            ]
-        },
-        {
-            "id": 36,
-            "title": "API Latency p99 by Resource (top slow resources)",
-            "description": "Which Kubernetes resources are slowest to query. Helps identify if pods, nodes, secrets, or configmaps are causing API slowdowns.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 24,
-                "x": 0,
-                "y": 125
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "s",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 20,
-                        "gradientMode": "none",
-                        "axisLabel": "p99 Latency",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "bottom",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "topk(10, histogram_quantile(0.99, sum by (resource, le) (rate(apiserver_request_duration_seconds_bucket{verb!=\"WATCH\"}[5m]))))",
-                    "legendFormat": "{{resource}}"
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "etcd Health (API Server Backend)",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 133
-            },
-            "id": 37,
-            "panels": []
-        },
-        {
-            "id": 38,
-            "title": "etcd Request Latency (p99)",
-            "description": "Latency of API server requests to etcd. etcd slowness directly impacts scheduling and all cluster operations. p99 > 100ms = etcd issues.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 134
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "s",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 20,
-                        "gradientMode": "none",
-                        "axisLabel": "Latency",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "bottom",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "histogram_quantile(0.99, sum by (operation, le) (rate(etcd_request_duration_seconds_bucket[5m])))",
-                    "legendFormat": "{{operation}}"
-                }
-            ]
-        },
-        {
-            "id": 39,
-            "title": "etcd Object Count by Resource",
-            "description": "Number of objects stored in etcd by resource type. Helps understand cluster scale.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 134
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 15,
-                        "gradientMode": "none",
-                        "axisLabel": "Objects",
-                        "drawStyle": "line",
-                        "pointSize": 5,
-                        "showPoints": "auto",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "topk(10, etcd_object_counts)",
-                    "legendFormat": "{{resource}}"
                 }
             ]
         }
