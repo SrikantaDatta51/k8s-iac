@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
-"""Generate Node Health Detector Grafana Dashboard.
+"""Generate SentinAI Node Health Detector Grafana Dashboard — v3.
 Professional quality — no emojis, clear legends, proper units.
-Metrics prefix: node_health_*
+
+Key features:
+  - Fleet health score (top row)
+  - Fleet heatmap (node × component status grid)
+  - Workload type variable: Notebook / Single Node / Multi Node
+  - Day 0 + Day 2 panels with critical path per workload type
+  - DCGM exporter metrics integration
 """
 import json, sys
 
@@ -26,25 +32,92 @@ LEGEND = {"displayMode": "table", "placement": "right",
           "calcs": ["lastNotNull"]}
 LEGEND_FULL = {"displayMode": "table", "placement": "right",
                "calcs": ["min", "max", "mean", "lastNotNull"]}
-LEGEND_BTM = {"displayMode": "table", "placement": "bottom",
-              "calcs": ["lastNotNull"]}
 
-# Color palette (professional, no neon)
-C_PASS   = "#56A64B"  # Muted green
-C_WARN   = "#E0A939"  # Warm amber
-C_FAIL   = "#C04040"  # Deep red
-C_UNK    = "#8F8F8F"  # Neutral gray
-C_P0     = "#C04040"  # Critical red
-C_P1     = "#E0663E"  # High orange
-C_P2     = "#E0A939"  # Medium amber
-C_P3     = "#7EB26D"  # Low green
-C_BLUE   = "#3274D9"  # Primary blue
-C_PURPLE = "#8F3BB8"  # Accent purple
+# Color palette (professional, muted)
+C_PASS   = "#56A64B"
+C_WARN   = "#E0A939"
+C_FAIL   = "#C04040"
+C_UNK    = "#8F8F8F"
+C_P0     = "#C04040"
+C_P1     = "#E0663E"
+C_P2     = "#E0A939"
+C_P3     = "#7EB26D"
+C_BLUE   = "#3274D9"
+C_PURPLE = "#8F3BB8"
+C_TEAL   = "#6ED0E0"
+C_ORANGE = "#EF843C"
 
 N = 'node=~"$node"'
 
-def row(title, y):
-    return {"type": "row", "title": title, "collapsed": False,
+# ────────────────────────────────────────────────────────────
+# WORKLOAD TYPE → CRITICAL PATH COMPONENTS
+# Each workload type has its own set of Day 0 and Day 2 checks
+# ────────────────────────────────────────────────────────────
+WORKLOAD_CRITICAL_PATHS = {
+    "notebook": {
+        "label": "Notebook (Single GPU)",
+        "day0": [
+            "day0_gpu_operator", "day0_driver_version",
+            "kubelet_health", "container_runtime_health",
+        ],
+        "day2": [
+            "gpu_dcgm_overall_health", "gpu_ecc_errors", "gpu_xid_errors",
+            "gpu_temperature", "gpu_memory_utilization",
+            "memory_pressure", "filesystem_pressure",
+            "kubelet_health", "container_runtime_health",
+            "node_pressure_conditions",
+        ],
+        "description": "Single GPU workstation. Critical path: GPU driver + kubelet + runtime."
+    },
+    "single_node": {
+        "label": "Single-Node Job (Multi-GPU)",
+        "day0": [
+            "day0_gpu_operator", "day0_driver_version", "day0_bios_audit",
+            "kubelet_health", "container_runtime_health",
+        ],
+        "day2": [
+            "gpu_dcgm_overall_health", "gpu_ecc_errors", "gpu_xid_errors",
+            "gpu_temperature", "gpu_nvlink_health", "gpu_pcie_health",
+            "gpu_power_violation", "gpu_memory_utilization", "gpu_row_remapping",
+            "gpu_topology_check", "nvswitch_health",
+            "day1_pcie_training", "day1_gpu_clock_throttle",
+            "multi_node_nccl_allreduce", "multi_node_nvbandwidth",
+            "cpu_mce_errors", "memory_pressure", "filesystem_pressure",
+            "kubelet_health", "container_runtime_health",
+            "node_pressure_conditions",
+        ],
+        "description": "Multi-GPU single node. Critical path: GPU + NVLink + NVSwitch + NCCL intra-node."
+    },
+    "multi_node": {
+        "label": "Multi-Node Job (Distributed Training)",
+        "day0": [
+            "day0_gpu_operator", "day0_network_operator",
+            "day0_sriov_vf_status", "day0_driver_version", "day0_bios_audit",
+            "kubelet_health", "container_runtime_health",
+        ],
+        "day2": [
+            "gpu_dcgm_overall_health", "gpu_ecc_errors", "gpu_xid_errors",
+            "gpu_temperature", "gpu_nvlink_health", "gpu_pcie_health",
+            "gpu_power_violation", "gpu_memory_utilization", "gpu_row_remapping",
+            "gpu_topology_check", "nvswitch_health",
+            "day1_pcie_training", "day1_gpu_clock_throttle",
+            "day1_ib_link_flapping", "day1_hca_fault", "day1_subnet_manager",
+            "multi_node_nccl_allreduce", "multi_node_nvbandwidth",
+            "infiniband_multi_port", "infiniband_error_counters",
+            "fabric_lid_assignment", "fabric_mtu_parity",
+            "fabric_hca_traffic_balance", "fabric_ib_bandwidth",
+            "cpu_mce_errors", "memory_pressure", "filesystem_pressure",
+            "nic_link_health", "infiniband_health",
+            "kubelet_health", "container_runtime_health",
+            "node_pressure_conditions",
+        ],
+        "description": "Multi-node distributed training. Critical path: ALL — GPU + NVLink + IB + SR-IOV + Fabric + NCCL inter-node."
+    },
+}
+
+
+def row(title, y, collapsed=False):
+    return {"type": "row", "title": title, "collapsed": collapsed,
             "gridPos": {"h": 1, "w": 24, "x": 0, "y": y}, "id": nid(), "panels": []}
 
 def stat(title, desc, gp, targets, unit="none", decimals=0,
@@ -98,28 +171,234 @@ def gauge(title, desc, gp, targets, unit="percentunit", thresholds=None):
         "datasource": ds(), "gridPos": gp,
         "fieldConfig": {"defaults": {"unit": unit, "decimals": 1,
             "thresholds": thresholds or {"mode": "absolute", "steps": [
-                {"color": C_PASS, "value": None},
-                {"color": C_WARN, "value": 0.6},
-                {"color": C_FAIL, "value": 0.9}]},
+                {"color": C_FAIL, "value": None},
+                {"color": C_WARN, "value": 0.5},
+                {"color": C_PASS, "value": 0.8}]},
             "min": 0, "max": 1}, "overrides": []},
         "options": {"reduceOptions": {"calcs": ["lastNotNull"]},
                     "showThresholdLabels": False, "showThresholdMarkers": True},
         "targets": refs(targets)
     }
 
+def heatmap(title, desc, gp, targets):
+    """Status heatmap — uses Grafana's state timeline panel for node×check grid."""
+    return {
+        "id": nid(), "title": title, "description": desc,
+        "type": "state-timeline",
+        "datasource": ds(), "gridPos": gp,
+        "fieldConfig": {"defaults": {
+            "custom": {"lineWidth": 0, "fillOpacity": 80},
+            "thresholds": {"mode": "absolute", "steps": [
+                {"color": C_PASS, "value": None},
+                {"color": C_WARN, "value": 1},
+                {"color": C_FAIL, "value": 2},
+                {"color": C_UNK, "value": 3}]},
+            "mappings": [
+                {"type": "value", "options": {"0": {"text": "PASS", "color": C_PASS}}},
+                {"type": "value", "options": {"1": {"text": "WARN", "color": C_WARN}}},
+                {"type": "value", "options": {"2": {"text": "FAIL", "color": C_FAIL}}},
+                {"type": "value", "options": {"3": {"text": "UNKNOWN", "color": C_UNK}}},
+            ]}, "overrides": []},
+        "options": {"showValue": "auto", "mergeValues": True,
+                    "alignValue": "center", "rowHeight": 0.85,
+                    "tooltip": {"mode": "multi"},
+                    "legend": {"displayMode": "list", "placement": "bottom"}},
+        "targets": refs(targets)
+    }
+
+
+def _check_regex(check_list):
+    """Build '(check1|check2|...)' regex from a list of check names."""
+    return "(" + "|".join(check_list) + ")"
+
 
 def build():
     panels = []
     y = 0
 
-    # ================================================================
-    # ROW 0: OVERVIEW — Node Health Status
-    # ================================================================
-    panels.append(row("Node Health Overview", y)); y += 1
+    # ════════════════════════════════════════════════════════
+    # TOP ROW: FLEET HEALTH SCORE
+    # ════════════════════════════════════════════════════════
+    panels.append(row("Fleet Health Score", y)); y += 1
 
-    # Health status stat
+    # Overall fleet health score — percentage of healthy nodes
+    panels.append(gauge(
+        "Fleet Health Score",
+        "Percentage of nodes reporting healthy across the fleet. "
+        "1.0 = all nodes healthy. Watch for drops below 0.8.",
+        {"h": 6, "w": 6, "x": 0, "y": y},
+        [tgt('avg(node_health_node_healthy) or vector(0)', "Fleet Health", instant=True)],
+    ))
+
+    # Total nodes healthy / total
     panels.append(stat(
-        "Node Health", "Overall node health: 1 = healthy, 0 = unhealthy",
+        "Healthy Nodes",
+        "Count of nodes with all checks passing",
+        {"h": 3, "w": 3, "x": 6, "y": y},
+        [tgt('count(node_health_node_healthy == 1) or vector(0)', "", instant=True)],
+        color_mode="value",
+        thresholds={"mode": "absolute", "steps": [{"color": C_PASS, "value": None}]}
+    ))
+
+    panels.append(stat(
+        "Unhealthy Nodes",
+        "Count of nodes with one or more failing checks",
+        {"h": 3, "w": 3, "x": 9, "y": y},
+        [tgt('count(node_health_node_healthy == 0) or vector(0)', "", instant=True)],
+        color_mode="value",
+        thresholds={"mode": "absolute", "steps": [
+            {"color": C_PASS, "value": None}, {"color": C_FAIL, "value": 1}]}
+    ))
+
+    panels.append(stat(
+        "Cordoned Nodes",
+        "Nodes where SentinAI recommends cordon",
+        {"h": 3, "w": 3, "x": 6, "y": y + 3},
+        [tgt('count(node_health_should_cordon == 1) or vector(0)', "", instant=True)],
+        color_mode="value",
+        thresholds={"mode": "absolute", "steps": [
+            {"color": C_PASS, "value": None}, {"color": C_FAIL, "value": 1}]}
+    ))
+
+    panels.append(stat(
+        "Total Nodes",
+        "Total nodes monitored by SentinAI",
+        {"h": 3, "w": 3, "x": 9, "y": y + 3},
+        [tgt('count(node_health_node_healthy) or vector(0)', "", instant=True)],
+        color_mode="value",
+        thresholds={"mode": "absolute", "steps": [{"color": C_BLUE, "value": None}]}
+    ))
+
+    # Fleet checks summary
+    panels.append(stat(
+        "Fleet Checks Passing",
+        "Total passing checks across all nodes",
+        {"h": 3, "w": 3, "x": 12, "y": y},
+        [tgt('sum(node_health_passed) or vector(0)', "", instant=True)],
+        color_mode="value",
+        thresholds={"mode": "absolute", "steps": [{"color": C_PASS, "value": None}]}
+    ))
+
+    panels.append(stat(
+        "Fleet Checks Warned",
+        "Total warned checks across all nodes",
+        {"h": 3, "w": 3, "x": 15, "y": y},
+        [tgt('sum(node_health_warned) or vector(0)', "", instant=True)],
+        color_mode="value",
+        thresholds={"mode": "absolute", "steps": [
+            {"color": C_PASS, "value": None}, {"color": C_WARN, "value": 1}]}
+    ))
+
+    panels.append(stat(
+        "Fleet Checks Failed",
+        "Total failed checks across all nodes",
+        {"h": 3, "w": 3, "x": 12, "y": y + 3},
+        [tgt('sum(node_health_failed) or vector(0)', "", instant=True)],
+        color_mode="value",
+        thresholds={"mode": "absolute", "steps": [
+            {"color": C_PASS, "value": None}, {"color": C_FAIL, "value": 1}]}
+    ))
+
+    panels.append(stat(
+        "Fleet Total Checks",
+        "Total checks executed across all nodes",
+        {"h": 3, "w": 3, "x": 15, "y": y + 3},
+        [tgt('sum(node_health_checks_run) or vector(0)', "", instant=True)],
+        color_mode="value",
+        thresholds={"mode": "absolute", "steps": [{"color": C_BLUE, "value": None}]}
+    ))
+
+    # Per-component fleet score
+    components = ["gpu", "cpu", "memory", "storage", "network", "kubernetes"]
+    for i, comp in enumerate(components):
+        x = 18 + (i % 2) * 3
+        yy = y + (i // 2) * 2
+        panels.append(stat(
+            comp.upper(), f"Worst status for {comp} across fleet",
+            {"h": 2, "w": 3, "x": x, "y": yy},
+            [tgt(f'max(node_health_component_status{{component="{comp}"}}) or vector(-1)',
+                 "", instant=True)],
+            color_mode="background",
+            mappings=[
+                {"type": "value", "options": {"-1": {"text": "N/A", "color": C_UNK}}},
+                {"type": "value", "options": {"0": {"text": "PASS", "color": C_PASS}}},
+                {"type": "value", "options": {"1": {"text": "WARN", "color": C_WARN}}},
+                {"type": "value", "options": {"2": {"text": "FAIL", "color": C_FAIL}}},
+            ],
+            thresholds={"mode": "absolute", "steps": [
+                {"color": C_PASS, "value": None}, {"color": C_WARN, "value": 1},
+                {"color": C_FAIL, "value": 2}]}
+        ))
+    y += 6
+
+    # Fleet health over time
+    panels.append(ts(
+        "Fleet Health Score Over Time",
+        "Percentage of healthy nodes over time. 1.0 = all healthy.",
+        {"h": 6, "w": 12, "x": 0, "y": y},
+        [tgt('avg(node_health_node_healthy)', "Fleet Health Score"),
+         tgt('count(node_health_node_healthy == 0) / count(node_health_node_healthy)',
+             "Unhealthy Ratio")],
+        axis="Score (0-1)", unit="percentunit",
+        overrides=[
+            {"matcher": {"id": "byName", "options": "Fleet Health Score"}, "properties": [
+                {"id": "color", "value": {"fixedColor": C_PASS, "mode": "fixed"}}]},
+            {"matcher": {"id": "byName", "options": "Unhealthy Ratio"}, "properties": [
+                {"id": "color", "value": {"fixedColor": C_FAIL, "mode": "fixed"}}]},
+        ]
+    ))
+
+    panels.append(ts(
+        "Nodes by Health Status Over Time",
+        "Stacked area: healthy vs unhealthy vs cordoned nodes.",
+        {"h": 6, "w": 12, "x": 12, "y": y},
+        [tgt('count(node_health_node_healthy == 1) or vector(0)', "Healthy"),
+         tgt('count(node_health_node_healthy == 0) or vector(0)', "Unhealthy"),
+         tgt('count(node_health_should_cordon == 1) or vector(0)', "Cordoned")],
+        axis="Nodes", stacking="normal",
+        overrides=[
+            {"matcher": {"id": "byName", "options": "Healthy"}, "properties": [
+                {"id": "color", "value": {"fixedColor": C_PASS, "mode": "fixed"}}]},
+            {"matcher": {"id": "byName", "options": "Unhealthy"}, "properties": [
+                {"id": "color", "value": {"fixedColor": C_FAIL, "mode": "fixed"}}]},
+            {"matcher": {"id": "byName", "options": "Cordoned"}, "properties": [
+                {"id": "color", "value": {"fixedColor": C_P1, "mode": "fixed"}}]},
+        ]
+    ))
+    y += 6
+
+    # ════════════════════════════════════════════════════════
+    # FLEET HEATMAP — Node × Component Status Grid
+    # ════════════════════════════════════════════════════════
+    panels.append(row("Fleet Heatmap — Node Health Grid", y)); y += 1
+
+    # Node × Component status heatmap
+    panels.append(heatmap(
+        "Node x Component Status (Fleet View)",
+        "Each row = one node, each segment = component worst status. "
+        "Green = PASS, Amber = WARN, Red = FAIL. Scan for red blocks.",
+        {"h": 12, "w": 24, "x": 0, "y": y},
+        [tgt(f'node_health_component_status', "{{node}} / {{component}}")]
+    ))
+    y += 12
+
+    # Individual check heatmap — per node
+    panels.append(heatmap(
+        "Node x Check Status (Selected Nodes)",
+        "Per-check status for selected nodes. Each row = one check on one node. "
+        "Use this to drill into specific node failures.",
+        {"h": 12, "w": 24, "x": 0, "y": y},
+        [tgt(f'node_health_check_status{{{N}}}', "{{node}} / {{check}}")]
+    ))
+    y += 12
+
+    # ════════════════════════════════════════════════════════
+    # PER-NODE OVERVIEW (filtered by $node)
+    # ════════════════════════════════════════════════════════
+    panels.append(row("Selected Node — Health Overview", y)); y += 1
+
+    panels.append(stat(
+        "Node Health", "1 = healthy, 0 = unhealthy",
         {"h": 4, "w": 4, "x": 0, "y": y},
         [tgt(f'node_health_node_healthy{{{N}}}', "{{node}}", instant=True)],
         color_mode="background",
@@ -131,9 +410,8 @@ def build():
             {"color": C_FAIL, "value": None}, {"color": C_PASS, "value": 1}]}
     ))
 
-    # Cordon status
     panels.append(stat(
-        "Cordon Signal", "Whether the detector recommends cordoning this node",
+        "Cordon Signal", "Whether the detector recommends cordoning",
         {"h": 4, "w": 4, "x": 4, "y": y},
         [tgt(f'node_health_should_cordon{{{N}}}', "{{node}}", instant=True)],
         color_mode="background",
@@ -145,15 +423,12 @@ def build():
             {"color": C_PASS, "value": None}, {"color": C_FAIL, "value": 1}]}
     ))
 
-    # Check counts
     for i, (label, metric, color) in enumerate([
-        ("Passed", "passed", C_PASS),
-        ("Warned", "warned", C_WARN),
-        ("Failed", "failed", C_FAIL),
-        ("Total Checks", "checks_run", C_BLUE),
+        ("Passed", "passed", C_PASS), ("Warned", "warned", C_WARN),
+        ("Failed", "failed", C_FAIL), ("Total", "checks_run", C_BLUE),
     ]):
         panels.append(stat(
-            label, f"Number of checks in {label.lower()} state",
+            label, f"Checks {label.lower()}",
             {"h": 4, "w": 4, "x": 8 + i * 4, "y": y},
             [tgt(f'node_health_{metric}{{{N}}}', "{{node}}", instant=True)],
             color_mode="value", text_mode="value",
@@ -161,11 +436,10 @@ def build():
         ))
     y += 4
 
-    # Component status — one stat per component
-    components = ["gpu", "cpu", "memory", "storage", "network", "kubernetes"]
+    # Component status for selected node
     for i, comp in enumerate(components):
         panels.append(stat(
-            comp.upper(), f"Worst check status for {comp} component",
+            comp.upper(), f"Worst {comp} check",
             {"h": 3, "w": 4, "x": i * 4, "y": y},
             [tgt(f'node_health_component_status{{{N}, component="{comp}"}}', "", instant=True)],
             color_mode="background",
@@ -181,13 +455,109 @@ def build():
         ))
     y += 3
 
-    # ================================================================
-    # ROW 1: ALL CHECKS TABLE — comprehensive status view
-    # ================================================================
+    # ════════════════════════════════════════════════════════
+    # DAY 0 — PROVISIONING HEALTH (by Workload Type)
+    # ════════════════════════════════════════════════════════
+    panels.append(row("Day 0 — Provisioning Health (by Workload Type)", y)); y += 1
+
+    for wk_key, wk in WORKLOAD_CRITICAL_PATHS.items():
+        check_re = _check_regex(wk["day0"])
+        panels.append(tbl(
+            f"Day 0 Critical Path: {wk['label']}",
+            f"Provisioning gate checks for {wk['label']}. "
+            f"ALL must PASS before workload can schedule.\n\n"
+            f"{wk['description']}",
+            {"h": 8, "w": 8, "x": list(WORKLOAD_CRITICAL_PATHS.keys()).index(wk_key) * 8, "y": y},
+            [tgt(f'node_health_check_status{{{N}, check=~"{check_re}"}}', "", fmt="table")],
+            transforms=[
+                {"id": "organize", "options": {
+                    "excludeByName": {"Time": True, "__name__": True, "job": True,
+                        "instance": True, "endpoint": True, "service": True,
+                        "namespace": True, "pod": True, "prometheus": True},
+                    "renameByName": {
+                        "node": "Node", "check": "Check", "component": "Component",
+                        "severity": "Sev", "Value": "Status"}}}
+            ],
+            overrides=[
+                {"matcher": {"id": "byName", "options": "Check"}, "properties": [
+                    {"id": "custom.width", "value": 200}]},
+                {"matcher": {"id": "byName", "options": "Status"}, "properties": [
+                    {"id": "custom.width", "value": 80},
+                    {"id": "mappings", "value": [
+                        {"type": "value", "options": {"0": {"text": "PASS", "color": C_PASS}}},
+                        {"type": "value", "options": {"1": {"text": "WARN", "color": C_WARN}}},
+                        {"type": "value", "options": {"2": {"text": "FAIL", "color": C_FAIL}}},
+                    ]},
+                    {"id": "custom.displayMode", "value": "color-background-solid"},
+                    {"id": "thresholds", "value": {"mode": "absolute", "steps": [
+                        {"color": C_PASS, "value": None}, {"color": C_WARN, "value": 1},
+                        {"color": C_FAIL, "value": 2}]}},
+                ]},
+            ],
+            sort=[{"displayName": "Status", "desc": True}]
+        ))
+    y += 8
+
+    # Day 0 check status over time
+    panels.append(ts(
+        "Day 0 All Provisioning Checks Over Time",
+        "SR-IOV VF, GPU Operator, Network Operator, BIOS, driver versions.",
+        {"h": 8, "w": 24, "x": 0, "y": y},
+        [tgt(f'node_health_check_status{{{N}, check=~"day0_.*"}}', "{{node}} / {{check}}")],
+        axis="Status (0=pass, 2=fail)"
+    ))
+    y += 8
+
+    # ════════════════════════════════════════════════════════
+    # DAY 2 — RUNTIME HEALTH (by Workload Type)
+    # ════════════════════════════════════════════════════════
+    panels.append(row("Day 2 — Runtime Health (by Workload Type)", y)); y += 1
+
+    for wk_key, wk in WORKLOAD_CRITICAL_PATHS.items():
+        check_re = _check_regex(wk["day2"])
+        panels.append(tbl(
+            f"Day 2 Critical Path: {wk['label']}",
+            f"Runtime health checks for {wk['label']}. "
+            f"Failure = job degradation or crash.\n\n"
+            f"{wk['description']}",
+            {"h": 10, "w": 8, "x": list(WORKLOAD_CRITICAL_PATHS.keys()).index(wk_key) * 8, "y": y},
+            [tgt(f'node_health_check_status{{{N}, check=~"{check_re}"}}', "", fmt="table")],
+            transforms=[
+                {"id": "organize", "options": {
+                    "excludeByName": {"Time": True, "__name__": True, "job": True,
+                        "instance": True, "endpoint": True, "service": True,
+                        "namespace": True, "pod": True, "prometheus": True},
+                    "renameByName": {
+                        "node": "Node", "check": "Check", "component": "Component",
+                        "severity": "Sev", "Value": "Status"}}}
+            ],
+            overrides=[
+                {"matcher": {"id": "byName", "options": "Check"}, "properties": [
+                    {"id": "custom.width", "value": 200}]},
+                {"matcher": {"id": "byName", "options": "Status"}, "properties": [
+                    {"id": "custom.width", "value": 80},
+                    {"id": "mappings", "value": [
+                        {"type": "value", "options": {"0": {"text": "PASS", "color": C_PASS}}},
+                        {"type": "value", "options": {"1": {"text": "WARN", "color": C_WARN}}},
+                        {"type": "value", "options": {"2": {"text": "FAIL", "color": C_FAIL}}},
+                    ]},
+                    {"id": "custom.displayMode", "value": "color-background-solid"},
+                    {"id": "thresholds", "value": {"mode": "absolute", "steps": [
+                        {"color": C_PASS, "value": None}, {"color": C_WARN, "value": 1},
+                        {"color": C_FAIL, "value": 2}]}},
+                ]},
+            ],
+            sort=[{"displayName": "Status", "desc": True}]
+        ))
+    y += 10
+
+    # ════════════════════════════════════════════════════════
+    # ALL CHECKS TABLE
+    # ════════════════════════════════════════════════════════
     panels.append(row("All Checks — Detailed Status", y)); y += 1
 
     panels.append(tbl(
-        "Check Results",
+        "Check Results (All)",
         "Every registered health check with current status, severity, and component.",
         {"h": 12, "w": 24, "x": 0, "y": y},
         [tgt(f'node_health_check_status{{{N}}}', "", fmt="table")],
@@ -198,16 +568,13 @@ def build():
                     "namespace": True, "pod": True, "prometheus": True},
                 "renameByName": {
                     "node": "Node", "check": "Check", "component": "Component",
-                    "severity": "Severity", "Value": "Status"
-                }}}
+                    "severity": "Severity", "Value": "Status"}}}
         ],
         overrides=[
             {"matcher": {"id": "byName", "options": "Check"}, "properties": [
                 {"id": "custom.width", "value": 280}]},
             {"matcher": {"id": "byName", "options": "Component"}, "properties": [
                 {"id": "custom.width", "value": 120}]},
-            {"matcher": {"id": "byName", "options": "Severity"}, "properties": [
-                {"id": "custom.width", "value": 100}]},
             {"matcher": {"id": "byName", "options": "Status"}, "properties": [
                 {"id": "custom.width", "value": 120},
                 {"id": "mappings", "value": [
@@ -221,117 +588,40 @@ def build():
                     {"color": C_PASS, "value": None}, {"color": C_WARN, "value": 1},
                     {"color": C_FAIL, "value": 2}, {"color": C_UNK, "value": 3}]}},
             ]},
-            {"matcher": {"id": "byName", "options": "Node"}, "properties": [
-                {"id": "custom.width", "value": 200}]},
         ],
         sort=[{"displayName": "Status", "desc": True}]
     ))
     y += 12
 
-    # ================================================================
-    # ROW 2: CHECK STATUS OVER TIME
-    # ================================================================
-    panels.append(row("Check Status Over Time", y)); y += 1
+    # ════════════════════════════════════════════════════════
+    # GPU HEALTH — DCGM EXPORTER METRICS
+    # ════════════════════════════════════════════════════════
+    panels.append(row("GPU Health — DCGM Exporter", y)); y += 1
 
-    # By component
     panels.append(ts(
-        "Component Health Over Time",
-        "Worst status per component over time. 0=pass, 1=warn, 2=fail, 3=unknown.",
-        {"h": 8, "w": 12, "x": 0, "y": y},
-        [tgt(f'node_health_component_status{{{N}}}', "{{component}}")],
-        axis="Status (0=pass, 2=fail)",
-        overrides=[
-            {"matcher": {"id": "byName", "options": "gpu"}, "properties": [{"id": "color", "value": {"fixedColor": C_BLUE, "mode": "fixed"}}]},
-            {"matcher": {"id": "byName", "options": "cpu"}, "properties": [{"id": "color", "value": {"fixedColor": C_PURPLE, "mode": "fixed"}}]},
-            {"matcher": {"id": "byName", "options": "memory"}, "properties": [{"id": "color", "value": {"fixedColor": "#E0A939", "mode": "fixed"}}]},
-            {"matcher": {"id": "byName", "options": "storage"}, "properties": [{"id": "color", "value": {"fixedColor": "#7EB26D", "mode": "fixed"}}]},
-            {"matcher": {"id": "byName", "options": "network"}, "properties": [{"id": "color", "value": {"fixedColor": "#6ED0E0", "mode": "fixed"}}]},
-            {"matcher": {"id": "byName", "options": "kubernetes"}, "properties": [{"id": "color", "value": {"fixedColor": "#EF843C", "mode": "fixed"}}]},
-        ]
-    ))
-
-    # Failed checks count over time
-    panels.append(ts(
-        "Failed Checks Over Time",
-        "Total count of failed checks. Spikes indicate new failures.",
-        {"h": 8, "w": 12, "x": 12, "y": y},
-        [tgt(f'node_health_failed{{{N}}}', "{{node}} — failed"),
-         tgt(f'node_health_warned{{{N}}}', "{{node}} — warned")],
-        axis="Check Count",
-        overrides=[
-            {"matcher": {"id": "byRegexp", "options": ".*failed.*"}, "properties": [{"id": "color", "value": {"fixedColor": C_FAIL, "mode": "fixed"}}]},
-            {"matcher": {"id": "byRegexp", "options": ".*warned.*"}, "properties": [{"id": "color", "value": {"fixedColor": C_WARN, "mode": "fixed"}}]},
-        ]
-    ))
-    y += 8
-
-    # Per-check status heatmap-style
-    panels.append(ts(
-        "Individual Check Status Over Time",
-        "Each line = one check. 0=pass, 1=warn, 2=fail. "
-        "Lines jumping up indicate check failures.",
-        {"h": 10, "w": 24, "x": 0, "y": y},
-        [tgt(f'node_health_check_status{{{N}}}', "{{check}}")],
-        axis="Status (0=pass, 2=fail)"
-    ))
-    y += 10
-
-    # ================================================================
-    # ROW 3: GPU HEALTH (component-specific)
-    # ================================================================
-    panels.append(row("GPU Health", y)); y += 1
-
-    # GPU checks status
-    panels.append(ts(
-        "GPU Check Status Over Time",
-        "All GPU-component checks. 0=pass, 1=warn, 2=fail.",
-        {"h": 8, "w": 12, "x": 0, "y": y},
-        [tgt(f'node_health_check_status{{{N}, component="gpu"}}', "{{check}}")],
-        axis="Status"
-    ))
-
-    # GPU cordon signals
-    panels.append(ts(
-        "GPU Cordon Signals",
-        "Which GPU checks are requesting node cordon. 1 = cordon requested.",
-        {"h": 8, "w": 12, "x": 12, "y": y},
-        [tgt(f'node_health_check_cordon{{{N}, component="gpu"}}', "{{check}}")],
-        axis="Cordon (1=yes)",
-        overrides=[
-            {"matcher": {"id": "byValue", "options": {"op": "gte", "value": 1}},
-             "properties": [{"id": "color", "value": {"fixedColor": C_FAIL, "mode": "fixed"}}]}
-        ]
-    ))
-    y += 8
-
-    # Live DCGM metrics (if DCGM exporter is available separately)
-    panels.append(ts(
-        "GPU Temperature (from DCGM Exporter)",
-        "Real-time GPU temperature from DCGM exporter. "
-        "Liquid-cooled B200: sustained max 70C. Air-cooled: max 83C.",
+        "GPU Temperature", "Liquid-cooled B200: max 70C sustained. Air-cooled: max 83C.",
         {"h": 8, "w": 8, "x": 0, "y": y},
-        [tgt('DCGM_FI_DEV_GPU_TEMP', "GPU {{gpu}}", )],
+        [tgt('DCGM_FI_DEV_GPU_TEMP', "GPU {{gpu}}")],
         axis="Temperature", unit="celsius"
     ))
 
     panels.append(ts(
-        "GPU ECC Errors (from DCGM Exporter)",
-        "Volatile ECC error counts: DBE (double-bit, uncorrectable) = P0 CRITICAL. "
-        "SBE (single-bit, correctable) = monitor trend.",
+        "GPU ECC Errors",
+        "DBE (double-bit, uncorrectable) = P0 CRITICAL. SBE = monitor trend.",
         {"h": 8, "w": 8, "x": 8, "y": y},
-        [tgt('DCGM_FI_DEV_ECC_DBE_VOL_TOTAL', "GPU {{gpu}} DBE (uncorrectable)"),
-         tgt('DCGM_FI_DEV_ECC_SBE_VOL_TOTAL', "GPU {{gpu}} SBE (correctable)")],
+        [tgt('DCGM_FI_DEV_ECC_DBE_VOL_TOTAL', "GPU {{gpu}} DBE"),
+         tgt('DCGM_FI_DEV_ECC_SBE_VOL_TOTAL', "GPU {{gpu}} SBE")],
         axis="Error Count",
         overrides=[
-            {"matcher": {"id": "byRegexp", "options": ".*DBE.*"}, "properties": [{"id": "color", "value": {"fixedColor": C_FAIL, "mode": "fixed"}}]},
-            {"matcher": {"id": "byRegexp", "options": ".*SBE.*"}, "properties": [{"id": "color", "value": {"fixedColor": C_WARN, "mode": "fixed"}}]},
+            {"matcher": {"id": "byRegexp", "options": ".*DBE.*"}, "properties": [
+                {"id": "color", "value": {"fixedColor": C_FAIL, "mode": "fixed"}}]},
+            {"matcher": {"id": "byRegexp", "options": ".*SBE.*"}, "properties": [
+                {"id": "color", "value": {"fixedColor": C_WARN, "mode": "fixed"}}]},
         ]
     ))
 
     panels.append(ts(
-        "GPU Power Draw (from DCGM Exporter)",
-        "Current power draw per GPU. B200 TDP = 1000W. "
-        "Sustained draw near TDP is normal under load.",
+        "GPU Power Draw", "B200 TDP = 1000W.",
         {"h": 8, "w": 8, "x": 16, "y": y},
         [tgt('DCGM_FI_DEV_POWER_USAGE', "GPU {{gpu}}")],
         axis="Power", unit="watt"
@@ -339,190 +629,87 @@ def build():
     y += 8
 
     panels.append(ts(
-        "NVLink Errors (from DCGM Exporter)",
-        "NVLink CRC flit errors, replay errors, recovery errors. "
-        "Recovery > 0 = NVLink degradation. CRC/replay = noise if low.",
+        "XID Error Timeline",
+        "All XIDs on this node. Spikes = investigate. Critical: 48,79,74,61-64,94-95.",
         {"h": 8, "w": 12, "x": 0, "y": y},
+        [tgt('DCGM_FI_DEV_XID_ERRORS', "GPU {{gpu}} XID")],
+        axis="XID Count"
+    ))
+
+    panels.append(ts(
+        "NVLink Errors",
+        "CRC, replay, recovery. Recovery > 0 = NVLink degradation.",
+        {"h": 8, "w": 12, "x": 12, "y": y},
         [tgt('DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL', "GPU {{gpu}} CRC"),
          tgt('DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL', "GPU {{gpu}} Replay"),
          tgt('DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL', "GPU {{gpu}} Recovery")],
         axis="Error Count",
         overrides=[
-            {"matcher": {"id": "byRegexp", "options": ".*Recovery.*"}, "properties": [{"id": "color", "value": {"fixedColor": C_FAIL, "mode": "fixed"}}]},
+            {"matcher": {"id": "byRegexp", "options": ".*Recovery.*"}, "properties": [
+                {"id": "color", "value": {"fixedColor": C_FAIL, "mode": "fixed"}}]},
         ]
     ))
-
-    panels.append(ts(
-        "GPU Memory Usage (from DCGM Exporter)",
-        "GPU framebuffer usage. B200 = 192 GB HBM3e per GPU.",
-        {"h": 8, "w": 12, "x": 12, "y": y},
-        [tgt('DCGM_FI_DEV_FB_USED', "GPU {{gpu}} Used"),
-         tgt('DCGM_FI_DEV_FB_FREE', "GPU {{gpu}} Free")],
-        axis="Memory", unit="decmbytes"
-    ))
     y += 8
 
-    # ================================================================
-    # ROW: DAY 0 — PROVISIONING HEALTH (SentinAI Page 8)
-    # ================================================================
-    panels.append(row("Day 0 — Provisioning Health", y)); y += 1
-
-    # Day 0 check status
     panels.append(ts(
-        "Day 0 Provisioning Check Status",
-        "SR-IOV VF status, GPU Operator, Network Operator, BIOS audit, driver versions. "
-        "Failures here are Job Blockers — pods stay Pending.",
-        {"h": 8, "w": 12, "x": 0, "y": y},
-        [tgt(f'node_health_check_status{{{N}, check=~"day0_.*"}}', "{{check}}")],
-        axis="Status (0=pass, 2=fail)"
-    ))
-
-    # Day 0 cordon signals
-    panels.append(ts(
-        "Day 0 Cordon Signals",
-        "Day 0 checks requesting cordon: SR-IOV VF stuck, GPU driver failure.",
-        {"h": 8, "w": 12, "x": 12, "y": y},
-        [tgt(f'node_health_check_cordon{{{N}, check=~"day0_.*"}}', "{{check}}")],
-        axis="Cordon (1=yes)"
-    ))
-    y += 8
-
-    # ================================================================
-    # ROW: DAY 1 — RUNTIME & PERFORMANCE (SentinAI Page 8)
-    # ================================================================
-    panels.append(row("Day 1 — Runtime & Performance", y)); y += 1
-
-    # Day 1 silent killers (Orange X)
-    panels.append(ts(
-        "Day 1 Silent Killers (Orange X)",
-        "Performance degradation checks: PCIe gen/width, GPU clock throttle, "
-        "IB link flapping. Don't crash jobs but cause 30-90% perf loss.",
-        {"h": 8, "w": 12, "x": 0, "y": y},
-        [tgt(f'node_health_check_status{{{N}, check=~"day1_.*"}}', "{{check}}")],
-        axis="Status (0=pass, 2=fail)"
-    ))
-
-    # Day 1 hard failures (Red X)
-    panels.append(ts(
-        "Day 1 Hard Failures (Red X)",
-        "Job killers: HCA fault, Subnet Manager down, XID 48/79. "
-        "These crash or hang multi-day training runs.",
-        {"h": 8, "w": 12, "x": 12, "y": y},
-        [tgt(f'node_health_check_cordon{{{N}, check=~"day1_.*"}}', "{{check}}")],
-        axis="Cordon (1=yes)"
-    ))
-    y += 8
-
-    # XID Timeline — every GPU error on a single time axis
-    panels.append(ts(
-        "XID Error Timeline (from DCGM Exporter)",
-        "XID errors across all GPUs on this node. "
-        "Critical XIDs: 48, 79, 74, 61-64, 94-95. Any spike = investigate.",
-        {"h": 8, "w": 24, "x": 0, "y": y},
-        [tgt('DCGM_FI_DEV_XID_ERRORS', "GPU {{gpu}} XID")],
-        axis="XID Error Count"
-    ))
-    y += 8
-
-    # PCIe generation and width (from DCGM)
-    panels.append(ts(
-        "PCIe Generation per GPU (from DCGM Exporter)",
-        "Current PCIe generation. Expected: Gen5 (5). "
-        "Gen4 = 50% bandwidth loss. Gen3 = 75% loss.",
-        {"h": 8, "w": 12, "x": 0, "y": y},
-        [tgt('DCGM_FI_DEV_PCIE_LINK_GEN', "GPU {{gpu}} Gen")],
-        axis="PCIe Generation"
-    ))
-
-    panels.append(ts(
-        "PCIe Link Width per GPU (from DCGM Exporter)",
-        "Current PCIe width. Expected: x16. "
-        "x8 = 50% bandwidth loss.",
-        {"h": 8, "w": 12, "x": 12, "y": y},
-        [tgt('DCGM_FI_DEV_PCIE_LINK_WIDTH', "GPU {{gpu}} Width")],
-        axis="PCIe Width"
-    ))
-    y += 8
-
-    # GPU SM Clock vs Max Clock — throttle detection
-    panels.append(ts(
-        "GPU SM Clock — Current vs Max (from DCGM Exporter)",
-        "Clock delta > 10% = throttling (Silent Killer). "
-        "Causes 30-90% perf degradation without crashing.",
-        {"h": 8, "w": 12, "x": 0, "y": y},
-        [tgt('DCGM_FI_DEV_SM_CLOCK', "GPU {{gpu}} Current SM"),
-         tgt('DCGM_FI_DEV_MAX_SM_CLOCK', "GPU {{gpu}} Max SM")],
+        "SM Clock — Current vs Max",
+        "Clock delta > 10% = throttling. 30-90% perf degradation.",
+        {"h": 8, "w": 8, "x": 0, "y": y},
+        [tgt('DCGM_FI_DEV_SM_CLOCK', "GPU {{gpu}} Current"),
+         tgt('DCGM_FI_DEV_MAX_SM_CLOCK', "GPU {{gpu}} Max")],
         axis="MHz"
     ))
 
-    # Thermal and Power Violations
     panels.append(ts(
-        "Thermal & Power Violations (from DCGM Exporter)",
-        "Thermal violation (clock throttle) and power violation (power cap). "
-        "Values in microseconds of throttle time.",
-        {"h": 8, "w": 12, "x": 12, "y": y},
+        "PCIe Gen / Width",
+        "Expected: Gen5 x16. Gen4 = 50% BW loss.",
+        {"h": 8, "w": 8, "x": 8, "y": y},
+        [tgt('DCGM_FI_DEV_PCIE_LINK_GEN', "GPU {{gpu}} Gen"),
+         tgt('DCGM_FI_DEV_PCIE_LINK_WIDTH', "GPU {{gpu}} Width")],
+        axis="Gen / Width"
+    ))
+
+    panels.append(ts(
+        "Thermal & Power Violations",
+        "Throttle time in microseconds.",
+        {"h": 8, "w": 8, "x": 16, "y": y},
         [tgt('DCGM_FI_DEV_THERMAL_VIOLATION', "GPU {{gpu}} Thermal"),
          tgt('DCGM_FI_DEV_POWER_VIOLATION', "GPU {{gpu}} Power")],
         axis="Violation (us)",
         overrides=[
-            {"matcher": {"id": "byRegexp", "options": ".*Thermal.*"}, "properties": [{"id": "color", "value": {"fixedColor": C_P1, "mode": "fixed"}}]},
-            {"matcher": {"id": "byRegexp", "options": ".*Power.*"}, "properties": [{"id": "color", "value": {"fixedColor": C_P2, "mode": "fixed"}}]},
+            {"matcher": {"id": "byRegexp", "options": ".*Thermal.*"}, "properties": [
+                {"id": "color", "value": {"fixedColor": C_P1, "mode": "fixed"}}]},
+            {"matcher": {"id": "byRegexp", "options": ".*Power.*"}, "properties": [
+                {"id": "color", "value": {"fixedColor": C_P2, "mode": "fixed"}}]},
         ]
     ))
     y += 8
 
-    # ================================================================
-    # ROW: FABRIC & IB HEALTH (SentinAI Page 5)
-    # ================================================================
-    panels.append(row("Fabric & InfiniBand Health", y)); y += 1
-
-    # Fabric checks
     panels.append(ts(
-        "Fabric Certification Check Status",
-        "LID assignment, MTU parity, HCA traffic balance, IB bandwidth. "
-        "All must PASS for node to be AI Ready.",
+        "GPU Memory Usage", "B200 = 192 GB HBM3e per GPU.",
         {"h": 8, "w": 12, "x": 0, "y": y},
-        [tgt(f'node_health_check_status{{{N}, check=~"fabric_.*"}}', "{{check}}")],
-        axis="Status (0=pass, 2=fail)"
+        [tgt('DCGM_FI_DEV_FB_USED', "GPU {{gpu}} Used"),
+         tgt('DCGM_FI_DEV_FB_FREE', "GPU {{gpu}} Free")],
+        axis="Memory", unit="decmbytes"
     ))
 
-    # IB throughput per HCA (identifies straggler nodes)
     panels.append(ts(
-        "Throughput per HCA Port",
-        "Identifies straggler nodes that slow down collectives. "
-        "All 8 HCAs should show roughly equal traffic. Silent HCA = Red X.",
+        "GPU Retired Pages",
+        "Retired pages (SBE < 60 = OK, DBE must be 0). Indicates HBM degradation.",
         {"h": 8, "w": 12, "x": 12, "y": y},
-        [tgt(f'node_health_check_status{{{N}, check="fabric_hca_traffic_balance"}}',
-             "HCA Balance Check")],
-        axis="Status"
+        [tgt('DCGM_FI_DEV_RETIRED_SBE', "GPU {{gpu}} Retired SBE"),
+         tgt('DCGM_FI_DEV_RETIRED_DBE', "GPU {{gpu}} Retired DBE")],
+        axis="Retired Pages",
+        overrides=[
+            {"matcher": {"id": "byRegexp", "options": ".*DBE.*"}, "properties": [
+                {"id": "color", "value": {"fixedColor": C_FAIL, "mode": "fixed"}}]},
+        ]
     ))
     y += 8
 
-    # ================================================================
-    # ROW 4: CPU & SYSTEM HEALTH
-    # ================================================================
-    panels.append(row("CPU, Memory, Storage Health", y)); y += 1
-
-    panels.append(ts(
-        "CPU/Memory/Storage Check Status",
-        "All non-GPU component checks over time.",
-        {"h": 8, "w": 12, "x": 0, "y": y},
-        [tgt(f'node_health_check_status{{{N}, component=~"cpu|memory|storage"}}', "{{check}}")],
-        axis="Status (0=pass, 2=fail)"
-    ))
-
-    panels.append(ts(
-        "Network & Kubernetes Check Status",
-        "Network interface and Kubernetes component checks.",
-        {"h": 8, "w": 12, "x": 12, "y": y},
-        [tgt(f'node_health_check_status{{{N}, component=~"network|kubernetes"}}', "{{check}}")],
-        axis="Status (0=pass, 2=fail)"
-    ))
-    y += 8
-
-    # ================================================================
-    # ROW 5: SEVERITY BREAKDOWN
-    # ================================================================
+    # ════════════════════════════════════════════════════════
+    # SEVERITY BREAKDOWN
+    # ════════════════════════════════════════════════════════
     panels.append(row("Severity Breakdown", y)); y += 1
 
     for i, (sev, label, color) in enumerate([
@@ -530,7 +717,7 @@ def build():
         ("2", "P2 Medium", C_P2), ("3", "P3 Low", C_P3),
     ]):
         panels.append(stat(
-            label, f"Number of checks at severity {label}",
+            label, f"Failing checks at severity {label}",
             {"h": 3, "w": 6, "x": i * 6, "y": y},
             [tgt(f'count(node_health_check_status{{{N}, severity="{sev}"}} > 0) or vector(0)',
                  label, instant=True)],
@@ -539,13 +726,11 @@ def build():
         ))
     y += 3
 
-    # Failing checks by severity
     panels.append(ts(
-        "Failing Checks by Severity Over Time",
-        "Count of checks in FAIL or WARN state, grouped by severity level.",
+        "Failing Checks by Severity Over Time", "",
         {"h": 8, "w": 24, "x": 0, "y": y},
         [tgt(f'count by (severity) (node_health_check_status{{{N}}} >= 1)', "{{severity}}")],
-        axis="Checks Failing/Warning",
+        axis="Checks Failing",
         overrides=[
             {"matcher": {"id": "byName", "options": "0"}, "properties": [
                 {"id": "displayName", "value": "P0 Critical"},
@@ -563,16 +748,15 @@ def build():
     ))
     y += 8
 
-    # ================================================================
-    # ROW 6: CORDON/UNCORDON HISTORY
-    # ================================================================
-    panels.append(row("Cordon Signal History", y)); y += 1
+    # ════════════════════════════════════════════════════════
+    # CORDON HISTORY & FRESHNESS
+    # ════════════════════════════════════════════════════════
+    panels.append(row("Cordon History & Agent Freshness", y)); y += 1
 
     panels.append(ts(
-        "Node Cordon Signal Over Time",
-        "1 = detector recommends cordoning. 0 = healthy. "
-        "Sustained 1 triggers automatic cordon after grace period.",
-        {"h": 6, "w": 24, "x": 0, "y": y},
+        "Cordon Signal Over Time",
+        "1 = cordon recommended. Sustained = auto-cordon after grace period.",
+        {"h": 6, "w": 12, "x": 0, "y": y},
         [tgt(f'node_health_should_cordon{{{N}}}', "{{node}}")],
         axis="Cordon (1=yes, 0=no)",
         overrides=[
@@ -581,20 +765,18 @@ def build():
                 {"id": "custom.fillOpacity", "value": 30}]}
         ]
     ))
-    y += 6
 
-    # Last check timestamp
     panels.append(stat(
-        "Last Check Run", "Unix timestamp of the most recent check cycle",
-        {"h": 3, "w": 8, "x": 0, "y": y},
+        "Last Check Run", "Timestamp of most recent check cycle",
+        {"h": 3, "w": 4, "x": 12, "y": y},
         [tgt(f'node_health_last_check_timestamp_seconds{{{N}}}', "{{node}}", instant=True)],
         unit="dateTimeFromNow", color_mode="value",
         thresholds={"mode": "absolute", "steps": [{"color": C_BLUE, "value": None}]}
     ))
 
     panels.append(stat(
-        "Check Cycle Freshness", "How many seconds since last check. Should be < check interval.",
-        {"h": 3, "w": 8, "x": 8, "y": y},
+        "Freshness", "Seconds since last check. Should be < interval.",
+        {"h": 3, "w": 4, "x": 16, "y": y},
         [tgt(f'time() - node_health_last_check_timestamp_seconds{{{N}}}',
              "{{node}}", instant=True)],
         unit="s", color_mode="background",
@@ -605,9 +787,8 @@ def build():
     ))
 
     panels.append(stat(
-        "Node Health Status",
-        "1 = all checks passing, 0 = one or more checks failing",
-        {"h": 3, "w": 8, "x": 16, "y": y},
+        "Health Status", "Redundant health indicator",
+        {"h": 3, "w": 4, "x": 20, "y": y},
         [tgt(f'node_health_node_healthy{{{N}}}', "{{node}}", instant=True)],
         color_mode="background", graph_mode="area",
         mappings=[
@@ -617,11 +798,25 @@ def build():
         thresholds={"mode": "absolute", "steps": [
             {"color": C_FAIL, "value": None}, {"color": C_PASS, "value": 1}]}
     ))
-    y += 3
 
-    # ================================================================
+    panels.append(ts(
+        "Component Health Over Time",
+        "Worst status per component. 0=pass, 1=warn, 2=fail, 3=unknown.",
+        {"h": 6, "w": 12, "x": 12, "y": y + 3},
+        [tgt(f'node_health_component_status{{{N}}}', "{{component}}")],
+        axis="Status",
+        overrides=[
+            {"matcher": {"id": "byName", "options": "gpu"}, "properties": [{"id": "color", "value": {"fixedColor": C_BLUE, "mode": "fixed"}}]},
+            {"matcher": {"id": "byName", "options": "cpu"}, "properties": [{"id": "color", "value": {"fixedColor": C_PURPLE, "mode": "fixed"}}]},
+            {"matcher": {"id": "byName", "options": "network"}, "properties": [{"id": "color", "value": {"fixedColor": C_TEAL, "mode": "fixed"}}]},
+            {"matcher": {"id": "byName", "options": "kubernetes"}, "properties": [{"id": "color", "value": {"fixedColor": C_ORANGE, "mode": "fixed"}}]},
+        ]
+    ))
+    y += 9
+
+    # ════════════════════════════════════════════════════════
     # TEMPLATING
-    # ================================================================
+    # ════════════════════════════════════════════════════════
     templating = {"list": [
         {"name": "datasource", "type": "datasource", "label": "Prometheus",
          "query": "prometheus", "current": {}, "hide": 0,
@@ -640,14 +835,14 @@ def build():
         "__inputs": [], "__requires": [
             {"type": "grafana", "id": "grafana", "name": "Grafana", "version": "9.0.0"},
             {"type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0"}],
-        "id": None, "uid": "node-health-detector-v1",
-        "title": "Node Health Detector",
-        "description": "Node health checks: GPU, CPU, Memory, Storage, Network, Kubernetes. "
-                       "Severity classification, cordon/uncordon signals, per-component status.",
-        "tags": ["node-health", "gpu", "dcgm", "kubernetes", "monitoring"],
+        "id": None, "uid": "sentinai-node-health-v3",
+        "title": "SentinAI — Node Health Detector",
+        "description": "Fleet health score, node heatmaps, Day 0/Day 2 panels by workload type "
+                       "(Notebook / Single Node / Multi Node), DCGM metrics, severity breakdown.",
+        "tags": ["sentinai", "node-health", "gpu", "dcgm", "fleet", "kubernetes"],
         "style": "dark", "timezone": "browser", "editable": True,
         "graphTooltip": 1, "fiscalYearStartMonth": 0, "liveNow": False,
-        "refresh": "30s", "schemaVersion": 38, "version": 1,
+        "refresh": "30s", "schemaVersion": 38, "version": 3,
         "time": {"from": "now-6h", "to": "now"}, "timepicker": {},
         "annotations": {"list": [{"builtIn": 1, "datasource": {"type": "grafana", "uid": "-- Grafana --"},
             "enable": True, "hide": True, "iconColor": "rgba(0, 211, 255, 1)",
@@ -666,4 +861,4 @@ if __name__ == "__main__":
     vc = len(d["templating"]["list"])
     print(f"Generated {out}: {pc} panels, {vc} template variables")
     for p in d["panels"]:
-        print(f"  [{p['type']:12s}] {p.get('title', '')}")
+        print(f"  [{p['type']:14s}] {p.get('title', '')}")

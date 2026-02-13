@@ -15,15 +15,16 @@
         }
     ],
     "id": null,
-    "uid": "node-health-detector-v1",
-    "title": "Node Health Detector",
-    "description": "Node health checks: GPU, CPU, Memory, Storage, Network, Kubernetes. Severity classification, cordon/uncordon signals, per-component status.",
+    "uid": "sentinai-node-health-v3",
+    "title": "SentinAI \u2014 Node Health Detector",
+    "description": "Fleet health score, node heatmaps, Day 0/Day 2 panels by workload type (Notebook / Single Node / Multi Node), DCGM metrics, severity breakdown.",
     "tags": [
+        "sentinai",
         "node-health",
         "gpu",
         "dcgm",
-        "kubernetes",
-        "monitoring"
+        "fleet",
+        "kubernetes"
     ],
     "style": "dark",
     "timezone": "browser",
@@ -33,7 +34,7 @@
     "liveNow": false,
     "refresh": "30s",
     "schemaVersion": 38,
-    "version": 1,
+    "version": 3,
     "time": {
         "from": "now-6h",
         "to": "now"
@@ -99,7 +100,7 @@
     "panels": [
         {
             "type": "row",
-            "title": "Node Health Overview",
+            "title": "Fleet Health Score",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
@@ -112,8 +113,1664 @@
         },
         {
             "id": 2,
+            "title": "Fleet Health Score",
+            "description": "Percentage of nodes reporting healthy across the fleet. 1.0 = all nodes healthy. Watch for drops below 0.8.",
+            "type": "gauge",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 0,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percentunit",
+                    "decimals": 1,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#C04040",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 0.5
+                            },
+                            {
+                                "color": "#56A64B",
+                                "value": 0.8
+                            }
+                        ]
+                    },
+                    "min": 0,
+                    "max": 1
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "showThresholdLabels": false,
+                "showThresholdMarkers": true
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "avg(node_health_node_healthy) or vector(0)",
+                    "legendFormat": "Fleet Health",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 3,
+            "title": "Healthy Nodes",
+            "description": "Count of nodes with all checks passing",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 3,
+                "w": 3,
+                "x": 6,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "count(node_health_node_healthy == 1) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 4,
+            "title": "Unhealthy Nodes",
+            "description": "Count of nodes with one or more failing checks",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 3,
+                "w": 3,
+                "x": 9,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "count(node_health_node_healthy == 0) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 5,
+            "title": "Cordoned Nodes",
+            "description": "Nodes where SentinAI recommends cordon",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 3,
+                "w": 3,
+                "x": 6,
+                "y": 4
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "count(node_health_should_cordon == 1) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 6,
+            "title": "Total Nodes",
+            "description": "Total nodes monitored by SentinAI",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 3,
+                "w": 3,
+                "x": 9,
+                "y": 4
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#3274D9",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "count(node_health_node_healthy) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 7,
+            "title": "Fleet Checks Passing",
+            "description": "Total passing checks across all nodes",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 3,
+                "w": 3,
+                "x": 12,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(node_health_passed) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 8,
+            "title": "Fleet Checks Warned",
+            "description": "Total warned checks across all nodes",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 3,
+                "w": 3,
+                "x": 15,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(node_health_warned) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 9,
+            "title": "Fleet Checks Failed",
+            "description": "Total failed checks across all nodes",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 3,
+                "w": 3,
+                "x": 12,
+                "y": 4
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(node_health_failed) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 10,
+            "title": "Fleet Total Checks",
+            "description": "Total checks executed across all nodes",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 3,
+                "w": 3,
+                "x": 15,
+                "y": 4
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#3274D9",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(node_health_checks_run) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 11,
+            "title": "GPU",
+            "description": "Worst status for gpu across fleet",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 2,
+                "w": 3,
+                "x": 18,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 1
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 2
+                            }
+                        ]
+                    },
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "-1": {
+                                    "text": "N/A",
+                                    "color": "#8F8F8F"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "0": {
+                                    "text": "PASS",
+                                    "color": "#56A64B"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "1": {
+                                    "text": "WARN",
+                                    "color": "#E0A939"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "2": {
+                                    "text": "FAIL",
+                                    "color": "#C04040"
+                                }
+                            }
+                        }
+                    ],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "max(node_health_component_status{component=\"gpu\"}) or vector(-1)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 12,
+            "title": "CPU",
+            "description": "Worst status for cpu across fleet",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 2,
+                "w": 3,
+                "x": 21,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 1
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 2
+                            }
+                        ]
+                    },
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "-1": {
+                                    "text": "N/A",
+                                    "color": "#8F8F8F"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "0": {
+                                    "text": "PASS",
+                                    "color": "#56A64B"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "1": {
+                                    "text": "WARN",
+                                    "color": "#E0A939"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "2": {
+                                    "text": "FAIL",
+                                    "color": "#C04040"
+                                }
+                            }
+                        }
+                    ],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "max(node_health_component_status{component=\"cpu\"}) or vector(-1)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 13,
+            "title": "MEMORY",
+            "description": "Worst status for memory across fleet",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 2,
+                "w": 3,
+                "x": 18,
+                "y": 3
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 1
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 2
+                            }
+                        ]
+                    },
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "-1": {
+                                    "text": "N/A",
+                                    "color": "#8F8F8F"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "0": {
+                                    "text": "PASS",
+                                    "color": "#56A64B"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "1": {
+                                    "text": "WARN",
+                                    "color": "#E0A939"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "2": {
+                                    "text": "FAIL",
+                                    "color": "#C04040"
+                                }
+                            }
+                        }
+                    ],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "max(node_health_component_status{component=\"memory\"}) or vector(-1)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 14,
+            "title": "STORAGE",
+            "description": "Worst status for storage across fleet",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 2,
+                "w": 3,
+                "x": 21,
+                "y": 3
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 1
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 2
+                            }
+                        ]
+                    },
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "-1": {
+                                    "text": "N/A",
+                                    "color": "#8F8F8F"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "0": {
+                                    "text": "PASS",
+                                    "color": "#56A64B"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "1": {
+                                    "text": "WARN",
+                                    "color": "#E0A939"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "2": {
+                                    "text": "FAIL",
+                                    "color": "#C04040"
+                                }
+                            }
+                        }
+                    ],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "max(node_health_component_status{component=\"storage\"}) or vector(-1)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 15,
+            "title": "NETWORK",
+            "description": "Worst status for network across fleet",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 2,
+                "w": 3,
+                "x": 18,
+                "y": 5
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 1
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 2
+                            }
+                        ]
+                    },
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "-1": {
+                                    "text": "N/A",
+                                    "color": "#8F8F8F"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "0": {
+                                    "text": "PASS",
+                                    "color": "#56A64B"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "1": {
+                                    "text": "WARN",
+                                    "color": "#E0A939"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "2": {
+                                    "text": "FAIL",
+                                    "color": "#C04040"
+                                }
+                            }
+                        }
+                    ],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "max(node_health_component_status{component=\"network\"}) or vector(-1)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 16,
+            "title": "KUBERNETES",
+            "description": "Worst status for kubernetes across fleet",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 2,
+                "w": 3,
+                "x": 21,
+                "y": 5
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 1
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 2
+                            }
+                        ]
+                    },
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "-1": {
+                                    "text": "N/A",
+                                    "color": "#8F8F8F"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "0": {
+                                    "text": "PASS",
+                                    "color": "#56A64B"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "1": {
+                                    "text": "WARN",
+                                    "color": "#E0A939"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "2": {
+                                    "text": "FAIL",
+                                    "color": "#C04040"
+                                }
+                            }
+                        }
+                    ],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "max(node_health_component_status{component=\"kubernetes\"}) or vector(-1)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 17,
+            "title": "Fleet Health Score Over Time",
+            "description": "Percentage of healthy nodes over time. 1.0 = all healthy.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 0,
+                "y": 7
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percentunit",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Score (0-1)",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Fleet Health Score"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "#56A64B",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Unhealthy Ratio"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "#C04040",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "avg(node_health_node_healthy)",
+                    "legendFormat": "Fleet Health Score"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "count(node_health_node_healthy == 0) / count(node_health_node_healthy)",
+                    "legendFormat": "Unhealthy Ratio"
+                }
+            ]
+        },
+        {
+            "id": 18,
+            "title": "Nodes by Health Status Over Time",
+            "description": "Stacked area: healthy vs unhealthy vs cordoned nodes.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 12,
+                "y": 7
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 0,
+                        "fillOpacity": 60,
+                        "gradientMode": "none",
+                        "axisLabel": "Nodes",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true,
+                        "stacking": {
+                            "mode": "normal"
+                        }
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Healthy"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "#56A64B",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Unhealthy"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "#C04040",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Cordoned"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "#E0663E",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "count(node_health_node_healthy == 1) or vector(0)",
+                    "legendFormat": "Healthy"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "count(node_health_node_healthy == 0) or vector(0)",
+                    "legendFormat": "Unhealthy"
+                },
+                {
+                    "refId": "C",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "count(node_health_should_cordon == 1) or vector(0)",
+                    "legendFormat": "Cordoned"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "Fleet Heatmap \u2014 Node Health Grid",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 13
+            },
+            "id": 19,
+            "panels": []
+        },
+        {
+            "id": 20,
+            "title": "Node x Component Status (Fleet View)",
+            "description": "Each row = one node, each segment = component worst status. Green = PASS, Amber = WARN, Red = FAIL. Scan for red blocks.",
+            "type": "state-timeline",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 12,
+                "w": 24,
+                "x": 0,
+                "y": 14
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "lineWidth": 0,
+                        "fillOpacity": 80
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 1
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 2
+                            },
+                            {
+                                "color": "#8F8F8F",
+                                "value": 3
+                            }
+                        ]
+                    },
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "0": {
+                                    "text": "PASS",
+                                    "color": "#56A64B"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "1": {
+                                    "text": "WARN",
+                                    "color": "#E0A939"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "2": {
+                                    "text": "FAIL",
+                                    "color": "#C04040"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "3": {
+                                    "text": "UNKNOWN",
+                                    "color": "#8F8F8F"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "overrides": []
+            },
+            "options": {
+                "showValue": "auto",
+                "mergeValues": true,
+                "alignValue": "center",
+                "rowHeight": 0.85,
+                "tooltip": {
+                    "mode": "multi"
+                },
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_health_component_status",
+                    "legendFormat": "{{node}} / {{component}}"
+                }
+            ]
+        },
+        {
+            "id": 21,
+            "title": "Node x Check Status (Selected Nodes)",
+            "description": "Per-check status for selected nodes. Each row = one check on one node. Use this to drill into specific node failures.",
+            "type": "state-timeline",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 12,
+                "w": 24,
+                "x": 0,
+                "y": 26
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "lineWidth": 0,
+                        "fillOpacity": 80
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 1
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 2
+                            },
+                            {
+                                "color": "#8F8F8F",
+                                "value": 3
+                            }
+                        ]
+                    },
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "0": {
+                                    "text": "PASS",
+                                    "color": "#56A64B"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "1": {
+                                    "text": "WARN",
+                                    "color": "#E0A939"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "2": {
+                                    "text": "FAIL",
+                                    "color": "#C04040"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "3": {
+                                    "text": "UNKNOWN",
+                                    "color": "#8F8F8F"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "overrides": []
+            },
+            "options": {
+                "showValue": "auto",
+                "mergeValues": true,
+                "alignValue": "center",
+                "rowHeight": 0.85,
+                "tooltip": {
+                    "mode": "multi"
+                },
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_health_check_status{node=~\"$node\"}",
+                    "legendFormat": "{{node}} / {{check}}"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "Selected Node \u2014 Health Overview",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 38
+            },
+            "id": 22,
+            "panels": []
+        },
+        {
+            "id": 23,
             "title": "Node Health",
-            "description": "Overall node health: 1 = healthy, 0 = unhealthy",
+            "description": "1 = healthy, 0 = unhealthy",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -123,7 +1780,7 @@
                 "h": 4,
                 "w": 4,
                 "x": 0,
-                "y": 1
+                "y": 39
             },
             "fieldConfig": {
                 "defaults": {
@@ -194,9 +1851,9 @@
             ]
         },
         {
-            "id": 3,
+            "id": 24,
             "title": "Cordon Signal",
-            "description": "Whether the detector recommends cordoning this node",
+            "description": "Whether the detector recommends cordoning",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -206,7 +1863,7 @@
                 "h": 4,
                 "w": 4,
                 "x": 4,
-                "y": 1
+                "y": 39
             },
             "fieldConfig": {
                 "defaults": {
@@ -277,9 +1934,9 @@
             ]
         },
         {
-            "id": 4,
+            "id": 25,
             "title": "Passed",
-            "description": "Number of checks in passed state",
+            "description": "Checks passed",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -289,7 +1946,7 @@
                 "h": 4,
                 "w": 4,
                 "x": 8,
-                "y": 1
+                "y": 39
             },
             "fieldConfig": {
                 "defaults": {
@@ -337,9 +1994,9 @@
             ]
         },
         {
-            "id": 5,
+            "id": 26,
             "title": "Warned",
-            "description": "Number of checks in warned state",
+            "description": "Checks warned",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -349,7 +2006,7 @@
                 "h": 4,
                 "w": 4,
                 "x": 12,
-                "y": 1
+                "y": 39
             },
             "fieldConfig": {
                 "defaults": {
@@ -397,9 +2054,9 @@
             ]
         },
         {
-            "id": 6,
+            "id": 27,
             "title": "Failed",
-            "description": "Number of checks in failed state",
+            "description": "Checks failed",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -409,7 +2066,7 @@
                 "h": 4,
                 "w": 4,
                 "x": 16,
-                "y": 1
+                "y": 39
             },
             "fieldConfig": {
                 "defaults": {
@@ -457,9 +2114,9 @@
             ]
         },
         {
-            "id": 7,
-            "title": "Total Checks",
-            "description": "Number of checks in total checks state",
+            "id": 28,
+            "title": "Total",
+            "description": "Checks total",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -469,7 +2126,7 @@
                 "h": 4,
                 "w": 4,
                 "x": 20,
-                "y": 1
+                "y": 39
             },
             "fieldConfig": {
                 "defaults": {
@@ -517,9 +2174,9 @@
             ]
         },
         {
-            "id": 8,
+            "id": 29,
             "title": "GPU",
-            "description": "Worst check status for gpu component",
+            "description": "Worst gpu check",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -529,7 +2186,7 @@
                 "h": 3,
                 "w": 4,
                 "x": 0,
-                "y": 5
+                "y": 43
             },
             "fieldConfig": {
                 "defaults": {
@@ -626,9 +2283,9 @@
             ]
         },
         {
-            "id": 9,
+            "id": 30,
             "title": "CPU",
-            "description": "Worst check status for cpu component",
+            "description": "Worst cpu check",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -638,7 +2295,7 @@
                 "h": 3,
                 "w": 4,
                 "x": 4,
-                "y": 5
+                "y": 43
             },
             "fieldConfig": {
                 "defaults": {
@@ -735,9 +2392,9 @@
             ]
         },
         {
-            "id": 10,
+            "id": 31,
             "title": "MEMORY",
-            "description": "Worst check status for memory component",
+            "description": "Worst memory check",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -747,7 +2404,7 @@
                 "h": 3,
                 "w": 4,
                 "x": 8,
-                "y": 5
+                "y": 43
             },
             "fieldConfig": {
                 "defaults": {
@@ -844,9 +2501,9 @@
             ]
         },
         {
-            "id": 11,
+            "id": 32,
             "title": "STORAGE",
-            "description": "Worst check status for storage component",
+            "description": "Worst storage check",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -856,7 +2513,7 @@
                 "h": 3,
                 "w": 4,
                 "x": 12,
-                "y": 5
+                "y": 43
             },
             "fieldConfig": {
                 "defaults": {
@@ -953,9 +2610,9 @@
             ]
         },
         {
-            "id": 12,
+            "id": 33,
             "title": "NETWORK",
-            "description": "Worst check status for network component",
+            "description": "Worst network check",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -965,7 +2622,7 @@
                 "h": 3,
                 "w": 4,
                 "x": 16,
-                "y": 5
+                "y": 43
             },
             "fieldConfig": {
                 "defaults": {
@@ -1062,9 +2719,9 @@
             ]
         },
         {
-            "id": 13,
+            "id": 34,
             "title": "KUBERNETES",
-            "description": "Worst check status for kubernetes component",
+            "description": "Worst kubernetes check",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -1074,7 +2731,7 @@
                 "h": 3,
                 "w": 4,
                 "x": 20,
-                "y": 5
+                "y": 43
             },
             "fieldConfig": {
                 "defaults": {
@@ -1172,20 +2829,1029 @@
         },
         {
             "type": "row",
+            "title": "Day 0 \u2014 Provisioning Health (by Workload Type)",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 46
+            },
+            "id": 35,
+            "panels": []
+        },
+        {
+            "id": 36,
+            "title": "Day 0 Critical Path: Notebook (Single GPU)",
+            "description": "Provisioning gate checks for Notebook (Single GPU). ALL must PASS before workload can schedule.\n\nSingle GPU workstation. Critical path: GPU driver + kubelet + runtime.",
+            "type": "table",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 0,
+                "y": 47
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Check"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 200
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Status"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 80
+                            },
+                            {
+                                "id": "mappings",
+                                "value": [
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "0": {
+                                                "text": "PASS",
+                                                "color": "#56A64B"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "1": {
+                                                "text": "WARN",
+                                                "color": "#E0A939"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "2": {
+                                                "text": "FAIL",
+                                                "color": "#C04040"
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "color-background-solid"
+                            },
+                            {
+                                "id": "thresholds",
+                                "value": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {
+                                            "color": "#56A64B",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#E0A939",
+                                            "value": 1
+                                        },
+                                        {
+                                            "color": "#C04040",
+                                            "value": 2
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "displayName": "Status",
+                        "desc": true
+                    }
+                ]
+            },
+            "transformations": [
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true,
+                            "job": true,
+                            "instance": true,
+                            "endpoint": true,
+                            "service": true,
+                            "namespace": true,
+                            "pod": true,
+                            "prometheus": true
+                        },
+                        "renameByName": {
+                            "node": "Node",
+                            "check": "Check",
+                            "component": "Component",
+                            "severity": "Sev",
+                            "Value": "Status"
+                        }
+                    }
+                }
+            ],
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_health_check_status{node=~\"$node\", check=~\"(day0_gpu_operator|day0_driver_version|kubelet_health|container_runtime_health)\"}",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 37,
+            "title": "Day 0 Critical Path: Single-Node Job (Multi-GPU)",
+            "description": "Provisioning gate checks for Single-Node Job (Multi-GPU). ALL must PASS before workload can schedule.\n\nMulti-GPU single node. Critical path: GPU + NVLink + NVSwitch + NCCL intra-node.",
+            "type": "table",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 8,
+                "y": 47
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Check"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 200
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Status"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 80
+                            },
+                            {
+                                "id": "mappings",
+                                "value": [
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "0": {
+                                                "text": "PASS",
+                                                "color": "#56A64B"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "1": {
+                                                "text": "WARN",
+                                                "color": "#E0A939"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "2": {
+                                                "text": "FAIL",
+                                                "color": "#C04040"
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "color-background-solid"
+                            },
+                            {
+                                "id": "thresholds",
+                                "value": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {
+                                            "color": "#56A64B",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#E0A939",
+                                            "value": 1
+                                        },
+                                        {
+                                            "color": "#C04040",
+                                            "value": 2
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "displayName": "Status",
+                        "desc": true
+                    }
+                ]
+            },
+            "transformations": [
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true,
+                            "job": true,
+                            "instance": true,
+                            "endpoint": true,
+                            "service": true,
+                            "namespace": true,
+                            "pod": true,
+                            "prometheus": true
+                        },
+                        "renameByName": {
+                            "node": "Node",
+                            "check": "Check",
+                            "component": "Component",
+                            "severity": "Sev",
+                            "Value": "Status"
+                        }
+                    }
+                }
+            ],
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_health_check_status{node=~\"$node\", check=~\"(day0_gpu_operator|day0_driver_version|day0_bios_audit|kubelet_health|container_runtime_health)\"}",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 38,
+            "title": "Day 0 Critical Path: Multi-Node Job (Distributed Training)",
+            "description": "Provisioning gate checks for Multi-Node Job (Distributed Training). ALL must PASS before workload can schedule.\n\nMulti-node distributed training. Critical path: ALL \u2014 GPU + NVLink + IB + SR-IOV + Fabric + NCCL inter-node.",
+            "type": "table",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 16,
+                "y": 47
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Check"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 200
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Status"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 80
+                            },
+                            {
+                                "id": "mappings",
+                                "value": [
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "0": {
+                                                "text": "PASS",
+                                                "color": "#56A64B"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "1": {
+                                                "text": "WARN",
+                                                "color": "#E0A939"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "2": {
+                                                "text": "FAIL",
+                                                "color": "#C04040"
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "color-background-solid"
+                            },
+                            {
+                                "id": "thresholds",
+                                "value": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {
+                                            "color": "#56A64B",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#E0A939",
+                                            "value": 1
+                                        },
+                                        {
+                                            "color": "#C04040",
+                                            "value": 2
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "displayName": "Status",
+                        "desc": true
+                    }
+                ]
+            },
+            "transformations": [
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true,
+                            "job": true,
+                            "instance": true,
+                            "endpoint": true,
+                            "service": true,
+                            "namespace": true,
+                            "pod": true,
+                            "prometheus": true
+                        },
+                        "renameByName": {
+                            "node": "Node",
+                            "check": "Check",
+                            "component": "Component",
+                            "severity": "Sev",
+                            "Value": "Status"
+                        }
+                    }
+                }
+            ],
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_health_check_status{node=~\"$node\", check=~\"(day0_gpu_operator|day0_network_operator|day0_sriov_vf_status|day0_driver_version|day0_bios_audit|kubelet_health|container_runtime_health)\"}",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 39,
+            "title": "Day 0 All Provisioning Checks Over Time",
+            "description": "SR-IOV VF, GPU Operator, Network Operator, BIOS, driver versions.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 55
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Status (0=pass, 2=fail)",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_health_check_status{node=~\"$node\", check=~\"day0_.*\"}",
+                    "legendFormat": "{{node}} / {{check}}"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "Day 2 \u2014 Runtime Health (by Workload Type)",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 63
+            },
+            "id": 40,
+            "panels": []
+        },
+        {
+            "id": 41,
+            "title": "Day 2 Critical Path: Notebook (Single GPU)",
+            "description": "Runtime health checks for Notebook (Single GPU). Failure = job degradation or crash.\n\nSingle GPU workstation. Critical path: GPU driver + kubelet + runtime.",
+            "type": "table",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 8,
+                "x": 0,
+                "y": 64
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Check"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 200
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Status"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 80
+                            },
+                            {
+                                "id": "mappings",
+                                "value": [
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "0": {
+                                                "text": "PASS",
+                                                "color": "#56A64B"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "1": {
+                                                "text": "WARN",
+                                                "color": "#E0A939"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "2": {
+                                                "text": "FAIL",
+                                                "color": "#C04040"
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "color-background-solid"
+                            },
+                            {
+                                "id": "thresholds",
+                                "value": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {
+                                            "color": "#56A64B",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#E0A939",
+                                            "value": 1
+                                        },
+                                        {
+                                            "color": "#C04040",
+                                            "value": 2
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "displayName": "Status",
+                        "desc": true
+                    }
+                ]
+            },
+            "transformations": [
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true,
+                            "job": true,
+                            "instance": true,
+                            "endpoint": true,
+                            "service": true,
+                            "namespace": true,
+                            "pod": true,
+                            "prometheus": true
+                        },
+                        "renameByName": {
+                            "node": "Node",
+                            "check": "Check",
+                            "component": "Component",
+                            "severity": "Sev",
+                            "Value": "Status"
+                        }
+                    }
+                }
+            ],
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_health_check_status{node=~\"$node\", check=~\"(gpu_dcgm_overall_health|gpu_ecc_errors|gpu_xid_errors|gpu_temperature|gpu_memory_utilization|memory_pressure|filesystem_pressure|kubelet_health|container_runtime_health|node_pressure_conditions)\"}",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 42,
+            "title": "Day 2 Critical Path: Single-Node Job (Multi-GPU)",
+            "description": "Runtime health checks for Single-Node Job (Multi-GPU). Failure = job degradation or crash.\n\nMulti-GPU single node. Critical path: GPU + NVLink + NVSwitch + NCCL intra-node.",
+            "type": "table",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 8,
+                "x": 8,
+                "y": 64
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Check"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 200
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Status"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 80
+                            },
+                            {
+                                "id": "mappings",
+                                "value": [
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "0": {
+                                                "text": "PASS",
+                                                "color": "#56A64B"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "1": {
+                                                "text": "WARN",
+                                                "color": "#E0A939"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "2": {
+                                                "text": "FAIL",
+                                                "color": "#C04040"
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "color-background-solid"
+                            },
+                            {
+                                "id": "thresholds",
+                                "value": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {
+                                            "color": "#56A64B",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#E0A939",
+                                            "value": 1
+                                        },
+                                        {
+                                            "color": "#C04040",
+                                            "value": 2
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "displayName": "Status",
+                        "desc": true
+                    }
+                ]
+            },
+            "transformations": [
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true,
+                            "job": true,
+                            "instance": true,
+                            "endpoint": true,
+                            "service": true,
+                            "namespace": true,
+                            "pod": true,
+                            "prometheus": true
+                        },
+                        "renameByName": {
+                            "node": "Node",
+                            "check": "Check",
+                            "component": "Component",
+                            "severity": "Sev",
+                            "Value": "Status"
+                        }
+                    }
+                }
+            ],
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_health_check_status{node=~\"$node\", check=~\"(gpu_dcgm_overall_health|gpu_ecc_errors|gpu_xid_errors|gpu_temperature|gpu_nvlink_health|gpu_pcie_health|gpu_power_violation|gpu_memory_utilization|gpu_row_remapping|gpu_topology_check|nvswitch_health|day1_pcie_training|day1_gpu_clock_throttle|multi_node_nccl_allreduce|multi_node_nvbandwidth|cpu_mce_errors|memory_pressure|filesystem_pressure|kubelet_health|container_runtime_health|node_pressure_conditions)\"}",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 43,
+            "title": "Day 2 Critical Path: Multi-Node Job (Distributed Training)",
+            "description": "Runtime health checks for Multi-Node Job (Distributed Training). Failure = job degradation or crash.\n\nMulti-node distributed training. Critical path: ALL \u2014 GPU + NVLink + IB + SR-IOV + Fabric + NCCL inter-node.",
+            "type": "table",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 8,
+                "x": 16,
+                "y": 64
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Check"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 200
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Status"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 80
+                            },
+                            {
+                                "id": "mappings",
+                                "value": [
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "0": {
+                                                "text": "PASS",
+                                                "color": "#56A64B"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "1": {
+                                                "text": "WARN",
+                                                "color": "#E0A939"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "2": {
+                                                "text": "FAIL",
+                                                "color": "#C04040"
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "color-background-solid"
+                            },
+                            {
+                                "id": "thresholds",
+                                "value": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {
+                                            "color": "#56A64B",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#E0A939",
+                                            "value": 1
+                                        },
+                                        {
+                                            "color": "#C04040",
+                                            "value": 2
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "displayName": "Status",
+                        "desc": true
+                    }
+                ]
+            },
+            "transformations": [
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true,
+                            "job": true,
+                            "instance": true,
+                            "endpoint": true,
+                            "service": true,
+                            "namespace": true,
+                            "pod": true,
+                            "prometheus": true
+                        },
+                        "renameByName": {
+                            "node": "Node",
+                            "check": "Check",
+                            "component": "Component",
+                            "severity": "Sev",
+                            "Value": "Status"
+                        }
+                    }
+                }
+            ],
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_health_check_status{node=~\"$node\", check=~\"(gpu_dcgm_overall_health|gpu_ecc_errors|gpu_xid_errors|gpu_temperature|gpu_nvlink_health|gpu_pcie_health|gpu_power_violation|gpu_memory_utilization|gpu_row_remapping|gpu_topology_check|nvswitch_health|day1_pcie_training|day1_gpu_clock_throttle|day1_ib_link_flapping|day1_hca_fault|day1_subnet_manager|multi_node_nccl_allreduce|multi_node_nvbandwidth|infiniband_multi_port|infiniband_error_counters|fabric_lid_assignment|fabric_mtu_parity|fabric_hca_traffic_balance|fabric_ib_bandwidth|cpu_mce_errors|memory_pressure|filesystem_pressure|nic_link_health|infiniband_health|kubelet_health|container_runtime_health|node_pressure_conditions)\"}",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "type": "row",
             "title": "All Checks \u2014 Detailed Status",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 8
+                "y": 74
             },
-            "id": 14,
+            "id": 44,
             "panels": []
         },
         {
-            "id": 15,
-            "title": "Check Results",
+            "id": 45,
+            "title": "Check Results (All)",
             "description": "Every registered health check with current status, severity, and component.",
             "type": "table",
             "datasource": {
@@ -1196,7 +3862,7 @@
                 "h": 12,
                 "w": 24,
                 "x": 0,
-                "y": 9
+                "y": 75
             },
             "fieldConfig": {
                 "defaults": {
@@ -1228,18 +3894,6 @@
                             {
                                 "id": "custom.width",
                                 "value": 120
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "Severity"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.width",
-                                "value": 100
                             }
                         ]
                     },
@@ -1323,18 +3977,6 @@
                                 }
                             }
                         ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "Node"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.width",
-                                "value": 200
-                            }
-                        ]
                     }
                 ]
             },
@@ -1388,479 +4030,21 @@
         },
         {
             "type": "row",
-            "title": "Check Status Over Time",
+            "title": "GPU Health \u2014 DCGM Exporter",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 21
+                "y": 87
             },
-            "id": 16,
+            "id": 46,
             "panels": []
         },
         {
-            "id": 17,
-            "title": "Component Health Over Time",
-            "description": "Worst status per component over time. 0=pass, 1=warn, 2=fail, 3=unknown.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 22
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Status (0=pass, 2=fail)",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": [
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "gpu"
-                        },
-                        "properties": [
-                            {
-                                "id": "color",
-                                "value": {
-                                    "fixedColor": "#3274D9",
-                                    "mode": "fixed"
-                                }
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "cpu"
-                        },
-                        "properties": [
-                            {
-                                "id": "color",
-                                "value": {
-                                    "fixedColor": "#8F3BB8",
-                                    "mode": "fixed"
-                                }
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "memory"
-                        },
-                        "properties": [
-                            {
-                                "id": "color",
-                                "value": {
-                                    "fixedColor": "#E0A939",
-                                    "mode": "fixed"
-                                }
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "storage"
-                        },
-                        "properties": [
-                            {
-                                "id": "color",
-                                "value": {
-                                    "fixedColor": "#7EB26D",
-                                    "mode": "fixed"
-                                }
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "network"
-                        },
-                        "properties": [
-                            {
-                                "id": "color",
-                                "value": {
-                                    "fixedColor": "#6ED0E0",
-                                    "mode": "fixed"
-                                }
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "kubernetes"
-                        },
-                        "properties": [
-                            {
-                                "id": "color",
-                                "value": {
-                                    "fixedColor": "#EF843C",
-                                    "mode": "fixed"
-                                }
-                            }
-                        ]
-                    }
-                ]
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "node_health_component_status{node=~\"$node\"}",
-                    "legendFormat": "{{component}}"
-                }
-            ]
-        },
-        {
-            "id": 18,
-            "title": "Failed Checks Over Time",
-            "description": "Total count of failed checks. Spikes indicate new failures.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 22
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Check Count",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": [
-                    {
-                        "matcher": {
-                            "id": "byRegexp",
-                            "options": ".*failed.*"
-                        },
-                        "properties": [
-                            {
-                                "id": "color",
-                                "value": {
-                                    "fixedColor": "#C04040",
-                                    "mode": "fixed"
-                                }
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byRegexp",
-                            "options": ".*warned.*"
-                        },
-                        "properties": [
-                            {
-                                "id": "color",
-                                "value": {
-                                    "fixedColor": "#E0A939",
-                                    "mode": "fixed"
-                                }
-                            }
-                        ]
-                    }
-                ]
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "node_health_failed{node=~\"$node\"}",
-                    "legendFormat": "{{node}} \u2014 failed"
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "node_health_warned{node=~\"$node\"}",
-                    "legendFormat": "{{node}} \u2014 warned"
-                }
-            ]
-        },
-        {
-            "id": 19,
-            "title": "Individual Check Status Over Time",
-            "description": "Each line = one check. 0=pass, 1=warn, 2=fail. Lines jumping up indicate check failures.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 10,
-                "w": 24,
-                "x": 0,
-                "y": 30
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Status (0=pass, 2=fail)",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "node_health_check_status{node=~\"$node\"}",
-                    "legendFormat": "{{check}}"
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "GPU Health",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 40
-            },
-            "id": 20,
-            "panels": []
-        },
-        {
-            "id": 21,
-            "title": "GPU Check Status Over Time",
-            "description": "All GPU-component checks. 0=pass, 1=warn, 2=fail.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 41
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Status",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "node_health_check_status{node=~\"$node\", component=\"gpu\"}",
-                    "legendFormat": "{{check}}"
-                }
-            ]
-        },
-        {
-            "id": 22,
-            "title": "GPU Cordon Signals",
-            "description": "Which GPU checks are requesting node cordon. 1 = cordon requested.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 41
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Cordon (1=yes)",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": [
-                    {
-                        "matcher": {
-                            "id": "byValue",
-                            "options": {
-                                "op": "gte",
-                                "value": 1
-                            }
-                        },
-                        "properties": [
-                            {
-                                "id": "color",
-                                "value": {
-                                    "fixedColor": "#C04040",
-                                    "mode": "fixed"
-                                }
-                            }
-                        ]
-                    }
-                ]
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "node_health_check_cordon{node=~\"$node\", component=\"gpu\"}",
-                    "legendFormat": "{{check}}"
-                }
-            ]
-        },
-        {
-            "id": 23,
-            "title": "GPU Temperature (from DCGM Exporter)",
-            "description": "Real-time GPU temperature from DCGM exporter. Liquid-cooled B200: sustained max 70C. Air-cooled: max 83C.",
+            "id": 47,
+            "title": "GPU Temperature",
+            "description": "Liquid-cooled B200: max 70C sustained. Air-cooled: max 83C.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1870,7 +4054,7 @@
                 "h": 8,
                 "w": 8,
                 "x": 0,
-                "y": 49
+                "y": 88
             },
             "fieldConfig": {
                 "defaults": {
@@ -1917,9 +4101,9 @@
             ]
         },
         {
-            "id": 24,
-            "title": "GPU ECC Errors (from DCGM Exporter)",
-            "description": "Volatile ECC error counts: DBE (double-bit, uncorrectable) = P0 CRITICAL. SBE (single-bit, correctable) = monitor trend.",
+            "id": 48,
+            "title": "GPU ECC Errors",
+            "description": "DBE (double-bit, uncorrectable) = P0 CRITICAL. SBE = monitor trend.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1929,7 +4113,7 @@
                 "h": 8,
                 "w": 8,
                 "x": 8,
-                "y": 49
+                "y": 88
             },
             "fieldConfig": {
                 "defaults": {
@@ -2002,7 +4186,7 @@
                         "uid": "${datasource}"
                     },
                     "expr": "DCGM_FI_DEV_ECC_DBE_VOL_TOTAL",
-                    "legendFormat": "GPU {{gpu}} DBE (uncorrectable)"
+                    "legendFormat": "GPU {{gpu}} DBE"
                 },
                 {
                     "refId": "B",
@@ -2011,14 +4195,14 @@
                         "uid": "${datasource}"
                     },
                     "expr": "DCGM_FI_DEV_ECC_SBE_VOL_TOTAL",
-                    "legendFormat": "GPU {{gpu}} SBE (correctable)"
+                    "legendFormat": "GPU {{gpu}} SBE"
                 }
             ]
         },
         {
-            "id": 25,
-            "title": "GPU Power Draw (from DCGM Exporter)",
-            "description": "Current power draw per GPU. B200 TDP = 1000W. Sustained draw near TDP is normal under load.",
+            "id": 49,
+            "title": "GPU Power Draw",
+            "description": "B200 TDP = 1000W.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -2028,7 +4212,7 @@
                 "h": 8,
                 "w": 8,
                 "x": 16,
-                "y": 49
+                "y": 88
             },
             "fieldConfig": {
                 "defaults": {
@@ -2075,9 +4259,9 @@
             ]
         },
         {
-            "id": 26,
-            "title": "NVLink Errors (from DCGM Exporter)",
-            "description": "NVLink CRC flit errors, replay errors, recovery errors. Recovery > 0 = NVLink degradation. CRC/replay = noise if low.",
+            "id": 50,
+            "title": "XID Error Timeline",
+            "description": "All XIDs on this node. Spikes = investigate. Critical: 48,79,74,61-64,94-95.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -2087,7 +4271,66 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 57
+                "y": 96
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "XID Count",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "DCGM_FI_DEV_XID_ERRORS",
+                    "legendFormat": "GPU {{gpu}} XID"
+                }
+            ]
+        },
+        {
+            "id": 51,
+            "title": "NVLink Errors",
+            "description": "CRC, replay, recovery. Recovery > 0 = NVLink degradation.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 96
             },
             "fieldConfig": {
                 "defaults": {
@@ -2168,9 +4411,9 @@
             ]
         },
         {
-            "id": 27,
-            "title": "GPU Memory Usage (from DCGM Exporter)",
-            "description": "GPU framebuffer usage. B200 = 192 GB HBM3e per GPU.",
+            "id": 52,
+            "title": "SM Clock \u2014 Current vs Max",
+            "description": "Clock delta > 10% = throttling. 30-90% perf degradation.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -2178,516 +4421,9 @@
             },
             "gridPos": {
                 "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 57
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "decmbytes",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Memory",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "DCGM_FI_DEV_FB_USED",
-                    "legendFormat": "GPU {{gpu}} Used"
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "DCGM_FI_DEV_FB_FREE",
-                    "legendFormat": "GPU {{gpu}} Free"
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "Day 0 \u2014 Provisioning Health",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
+                "w": 8,
                 "x": 0,
-                "y": 65
-            },
-            "id": 28,
-            "panels": []
-        },
-        {
-            "id": 29,
-            "title": "Day 0 Provisioning Check Status",
-            "description": "SR-IOV VF status, GPU Operator, Network Operator, BIOS audit, driver versions. Failures here are Job Blockers \u2014 pods stay Pending.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 66
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Status (0=pass, 2=fail)",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "node_health_check_status{node=~\"$node\", check=~\"day0_.*\"}",
-                    "legendFormat": "{{check}}"
-                }
-            ]
-        },
-        {
-            "id": 30,
-            "title": "Day 0 Cordon Signals",
-            "description": "Day 0 checks requesting cordon: SR-IOV VF stuck, GPU driver failure.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 66
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Cordon (1=yes)",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "node_health_check_cordon{node=~\"$node\", check=~\"day0_.*\"}",
-                    "legendFormat": "{{check}}"
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "Day 1 \u2014 Runtime & Performance",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 74
-            },
-            "id": 31,
-            "panels": []
-        },
-        {
-            "id": 32,
-            "title": "Day 1 Silent Killers (Orange X)",
-            "description": "Performance degradation checks: PCIe gen/width, GPU clock throttle, IB link flapping. Don't crash jobs but cause 30-90% perf loss.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 75
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Status (0=pass, 2=fail)",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "node_health_check_status{node=~\"$node\", check=~\"day1_.*\"}",
-                    "legendFormat": "{{check}}"
-                }
-            ]
-        },
-        {
-            "id": 33,
-            "title": "Day 1 Hard Failures (Red X)",
-            "description": "Job killers: HCA fault, Subnet Manager down, XID 48/79. These crash or hang multi-day training runs.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 75
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Cordon (1=yes)",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "node_health_check_cordon{node=~\"$node\", check=~\"day1_.*\"}",
-                    "legendFormat": "{{check}}"
-                }
-            ]
-        },
-        {
-            "id": 34,
-            "title": "XID Error Timeline (from DCGM Exporter)",
-            "description": "XID errors across all GPUs on this node. Critical XIDs: 48, 79, 74, 61-64, 94-95. Any spike = investigate.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 24,
-                "x": 0,
-                "y": 83
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "XID Error Count",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "DCGM_FI_DEV_XID_ERRORS",
-                    "legendFormat": "GPU {{gpu}} XID"
-                }
-            ]
-        },
-        {
-            "id": 35,
-            "title": "PCIe Generation per GPU (from DCGM Exporter)",
-            "description": "Current PCIe generation. Expected: Gen5 (5). Gen4 = 50% bandwidth loss. Gen3 = 75% loss.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 91
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "PCIe Generation",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "DCGM_FI_DEV_PCIE_LINK_GEN",
-                    "legendFormat": "GPU {{gpu}} Gen"
-                }
-            ]
-        },
-        {
-            "id": 36,
-            "title": "PCIe Link Width per GPU (from DCGM Exporter)",
-            "description": "Current PCIe width. Expected: x16. x8 = 50% bandwidth loss.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 91
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "PCIe Width",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "DCGM_FI_DEV_PCIE_LINK_WIDTH",
-                    "legendFormat": "GPU {{gpu}} Width"
-                }
-            ]
-        },
-        {
-            "id": 37,
-            "title": "GPU SM Clock \u2014 Current vs Max (from DCGM Exporter)",
-            "description": "Clock delta > 10% = throttling (Silent Killer). Causes 30-90% perf degradation without crashing.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 99
+                "y": 104
             },
             "fieldConfig": {
                 "defaults": {
@@ -2729,7 +4465,7 @@
                         "uid": "${datasource}"
                     },
                     "expr": "DCGM_FI_DEV_SM_CLOCK",
-                    "legendFormat": "GPU {{gpu}} Current SM"
+                    "legendFormat": "GPU {{gpu}} Current"
                 },
                 {
                     "refId": "B",
@@ -2738,14 +4474,14 @@
                         "uid": "${datasource}"
                     },
                     "expr": "DCGM_FI_DEV_MAX_SM_CLOCK",
-                    "legendFormat": "GPU {{gpu}} Max SM"
+                    "legendFormat": "GPU {{gpu}} Max"
                 }
             ]
         },
         {
-            "id": 38,
-            "title": "Thermal & Power Violations (from DCGM Exporter)",
-            "description": "Thermal violation (clock throttle) and power violation (power cap). Values in microseconds of throttle time.",
+            "id": 53,
+            "title": "PCIe Gen / Width",
+            "description": "Expected: Gen5 x16. Gen4 = 50% BW loss.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -2753,9 +4489,77 @@
             },
             "gridPos": {
                 "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 99
+                "w": 8,
+                "x": 8,
+                "y": 104
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Gen / Width",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "DCGM_FI_DEV_PCIE_LINK_GEN",
+                    "legendFormat": "GPU {{gpu}} Gen"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "DCGM_FI_DEV_PCIE_LINK_WIDTH",
+                    "legendFormat": "GPU {{gpu}} Width"
+                }
+            ]
+        },
+        {
+            "id": 54,
+            "title": "Thermal & Power Violations",
+            "description": "Throttle time in microseconds.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 16,
+                "y": 104
             },
             "fieldConfig": {
                 "defaults": {
@@ -2842,22 +4646,9 @@
             ]
         },
         {
-            "type": "row",
-            "title": "Fabric & InfiniBand Health",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 107
-            },
-            "id": 39,
-            "panels": []
-        },
-        {
-            "id": 40,
-            "title": "Fabric Certification Check Status",
-            "description": "LID assignment, MTU parity, HCA traffic balance, IB bandwidth. All must PASS for node to be AI Ready.",
+            "id": 55,
+            "title": "GPU Memory Usage",
+            "description": "B200 = 192 GB HBM3e per GPU.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -2867,16 +4658,16 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 108
+                "y": 112
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "short",
+                    "unit": "decmbytes",
                     "custom": {
                         "lineWidth": 2,
                         "fillOpacity": 10,
                         "gradientMode": "none",
-                        "axisLabel": "Status (0=pass, 2=fail)",
+                        "axisLabel": "Memory",
                         "drawStyle": "line",
                         "pointSize": 4,
                         "showPoints": "never",
@@ -2908,15 +4699,24 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "node_health_check_status{node=~\"$node\", check=~\"fabric_.*\"}",
-                    "legendFormat": "{{check}}"
+                    "expr": "DCGM_FI_DEV_FB_USED",
+                    "legendFormat": "GPU {{gpu}} Used"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "DCGM_FI_DEV_FB_FREE",
+                    "legendFormat": "GPU {{gpu}} Free"
                 }
             ]
         },
         {
-            "id": 41,
-            "title": "Throughput per HCA Port",
-            "description": "Identifies straggler nodes that slow down collectives. All 8 HCAs should show roughly equal traffic. Silent HCA = Red X.",
+            "id": 56,
+            "title": "GPU Retired Pages",
+            "description": "Retired pages (SBE < 60 = OK, DBE must be 0). Indicates HBM degradation.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -2926,7 +4726,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 108
+                "y": 112
             },
             "fieldConfig": {
                 "defaults": {
@@ -2935,14 +4735,30 @@
                         "lineWidth": 2,
                         "fillOpacity": 10,
                         "gradientMode": "none",
-                        "axisLabel": "Status",
+                        "axisLabel": "Retired Pages",
                         "drawStyle": "line",
                         "pointSize": 4,
                         "showPoints": "never",
                         "spanNulls": true
                     }
                 },
-                "overrides": []
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byRegexp",
+                            "options": ".*DBE.*"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "#C04040",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    }
+                ]
             },
             "options": {
                 "legend": {
@@ -2967,139 +4783,17 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "node_health_check_status{node=~\"$node\", check=\"fabric_hca_traffic_balance\"}",
-                    "legendFormat": "HCA Balance Check"
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "CPU, Memory, Storage Health",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 116
-            },
-            "id": 42,
-            "panels": []
-        },
-        {
-            "id": 43,
-            "title": "CPU/Memory/Storage Check Status",
-            "description": "All non-GPU component checks over time.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 117
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Status (0=pass, 2=fail)",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
+                    "expr": "DCGM_FI_DEV_RETIRED_SBE",
+                    "legendFormat": "GPU {{gpu}} Retired SBE"
                 },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
                 {
-                    "refId": "A",
+                    "refId": "B",
                     "datasource": {
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "node_health_check_status{node=~\"$node\", component=~\"cpu|memory|storage\"}",
-                    "legendFormat": "{{check}}"
-                }
-            ]
-        },
-        {
-            "id": 44,
-            "title": "Network & Kubernetes Check Status",
-            "description": "Network interface and Kubernetes component checks.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 117
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Status (0=pass, 2=fail)",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "node_health_check_status{node=~\"$node\", component=~\"network|kubernetes\"}",
-                    "legendFormat": "{{check}}"
+                    "expr": "DCGM_FI_DEV_RETIRED_DBE",
+                    "legendFormat": "GPU {{gpu}} Retired DBE"
                 }
             ]
         },
@@ -3111,15 +4805,15 @@
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 125
+                "y": 120
             },
-            "id": 45,
+            "id": 57,
             "panels": []
         },
         {
-            "id": 46,
+            "id": 58,
             "title": "P0 Critical",
-            "description": "Number of checks at severity P0 Critical",
+            "description": "Failing checks at severity P0 Critical",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -3129,7 +4823,7 @@
                 "h": 3,
                 "w": 6,
                 "x": 0,
-                "y": 126
+                "y": 121
             },
             "fieldConfig": {
                 "defaults": {
@@ -3177,9 +4871,9 @@
             ]
         },
         {
-            "id": 47,
+            "id": 59,
             "title": "P1 High",
-            "description": "Number of checks at severity P1 High",
+            "description": "Failing checks at severity P1 High",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -3189,7 +4883,7 @@
                 "h": 3,
                 "w": 6,
                 "x": 6,
-                "y": 126
+                "y": 121
             },
             "fieldConfig": {
                 "defaults": {
@@ -3237,9 +4931,9 @@
             ]
         },
         {
-            "id": 48,
+            "id": 60,
             "title": "P2 Medium",
-            "description": "Number of checks at severity P2 Medium",
+            "description": "Failing checks at severity P2 Medium",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -3249,7 +4943,7 @@
                 "h": 3,
                 "w": 6,
                 "x": 12,
-                "y": 126
+                "y": 121
             },
             "fieldConfig": {
                 "defaults": {
@@ -3297,9 +4991,9 @@
             ]
         },
         {
-            "id": 49,
+            "id": 61,
             "title": "P3 Low",
-            "description": "Number of checks at severity P3 Low",
+            "description": "Failing checks at severity P3 Low",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -3309,7 +5003,7 @@
                 "h": 3,
                 "w": 6,
                 "x": 18,
-                "y": 126
+                "y": 121
             },
             "fieldConfig": {
                 "defaults": {
@@ -3357,9 +5051,9 @@
             ]
         },
         {
-            "id": 50,
+            "id": 62,
             "title": "Failing Checks by Severity Over Time",
-            "description": "Count of checks in FAIL or WARN state, grouped by severity level.",
+            "description": "",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -3369,7 +5063,7 @@
                 "h": 8,
                 "w": 24,
                 "x": 0,
-                "y": 129
+                "y": 124
             },
             "fieldConfig": {
                 "defaults": {
@@ -3378,7 +5072,7 @@
                         "lineWidth": 2,
                         "fillOpacity": 10,
                         "gradientMode": "none",
-                        "axisLabel": "Checks Failing/Warning",
+                        "axisLabel": "Checks Failing",
                         "drawStyle": "line",
                         "pointSize": 4,
                         "showPoints": "never",
@@ -3494,21 +5188,21 @@
         },
         {
             "type": "row",
-            "title": "Cordon Signal History",
+            "title": "Cordon History & Agent Freshness",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 137
+                "y": 132
             },
-            "id": 51,
+            "id": 63,
             "panels": []
         },
         {
-            "id": 52,
-            "title": "Node Cordon Signal Over Time",
-            "description": "1 = detector recommends cordoning. 0 = healthy. Sustained 1 triggers automatic cordon after grace period.",
+            "id": 64,
+            "title": "Cordon Signal Over Time",
+            "description": "1 = cordon recommended. Sustained = auto-cordon after grace period.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -3516,9 +5210,9 @@
             },
             "gridPos": {
                 "h": 6,
-                "w": 24,
+                "w": 12,
                 "x": 0,
-                "y": 138
+                "y": 133
             },
             "fieldConfig": {
                 "defaults": {
@@ -3585,9 +5279,9 @@
             ]
         },
         {
-            "id": 53,
+            "id": 65,
             "title": "Last Check Run",
-            "description": "Unix timestamp of the most recent check cycle",
+            "description": "Timestamp of most recent check cycle",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -3595,9 +5289,9 @@
             },
             "gridPos": {
                 "h": 3,
-                "w": 8,
-                "x": 0,
-                "y": 144
+                "w": 4,
+                "x": 12,
+                "y": 133
             },
             "fieldConfig": {
                 "defaults": {
@@ -3645,9 +5339,9 @@
             ]
         },
         {
-            "id": 54,
-            "title": "Check Cycle Freshness",
-            "description": "How many seconds since last check. Should be < check interval.",
+            "id": 66,
+            "title": "Freshness",
+            "description": "Seconds since last check. Should be < interval.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -3655,9 +5349,9 @@
             },
             "gridPos": {
                 "h": 3,
-                "w": 8,
-                "x": 8,
-                "y": 144
+                "w": 4,
+                "x": 16,
+                "y": 133
             },
             "fieldConfig": {
                 "defaults": {
@@ -3713,9 +5407,9 @@
             ]
         },
         {
-            "id": 55,
-            "title": "Node Health Status",
-            "description": "1 = all checks passing, 0 = one or more checks failing",
+            "id": 67,
+            "title": "Health Status",
+            "description": "Redundant health indicator",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -3723,9 +5417,9 @@
             },
             "gridPos": {
                 "h": 3,
-                "w": 8,
-                "x": 16,
-                "y": 144
+                "w": 4,
+                "x": 20,
+                "y": 133
             },
             "fieldConfig": {
                 "defaults": {
@@ -3792,6 +5486,126 @@
                     "expr": "node_health_node_healthy{node=~\"$node\"}",
                     "legendFormat": "{{node}}",
                     "instant": true
+                }
+            ]
+        },
+        {
+            "id": 68,
+            "title": "Component Health Over Time",
+            "description": "Worst status per component. 0=pass, 1=warn, 2=fail, 3=unknown.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 12,
+                "y": 136
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Status",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "gpu"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "#3274D9",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "cpu"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "#8F3BB8",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "network"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "#6ED0E0",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "kubernetes"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "#EF843C",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_health_component_status{node=~\"$node\"}",
+                    "legendFormat": "{{component}}"
                 }
             ]
         }
