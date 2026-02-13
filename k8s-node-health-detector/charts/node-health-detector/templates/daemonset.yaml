@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "node-health-detector.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "node-health-detector.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: agent
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "node-health-detector.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "node-health-detector.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: agent
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.metricsPort }}"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: {{ include "node-health-detector.serviceAccountName" . }}
+      hostPID: true
+      hostNetwork: false
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        runAsUser: {{ .runAsUser | default 0 }}
+      {{- end }}
+      containers:
+        - name: agent
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.podSecurityContext.privileged }}
+          securityContext:
+            privileged: true
+          {{- end }}
+          env:
+            - name: NODE_TYPE
+              value: "{{ .Values.nodeType }}"
+            - name: CHECK_INTERVAL
+              value: "{{ .Values.checkInterval }}"
+            - name: METRICS_PORT
+              value: "{{ .Values.metricsPort }}"
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CONFIG_PATH
+              value: /etc/node-health-detector/config.yaml
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metricsPort }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/node-health-detector
+              readOnly: true
+            {{- range .Values.hostPaths }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+              readOnly: {{ .readOnly | default true }}
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "node-health-detector.fullname" . }}-config
+        {{- range .Values.hostPaths }}
+        - name: {{ .name }}
+          hostPath:
+            path: {{ .hostPath }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

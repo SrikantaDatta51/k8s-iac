@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "node-health-detector.fullname" . }}-config
+  labels:
+    app.kubernetes.io/name: {{ include "node-health-detector.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  config.yaml: |
+    node_type: {{ .Values.nodeType }}
+    interval: {{ .Values.checkInterval }}
+    metrics_port: {{ .Values.metricsPort }}
+    auto_cordon: {{ .Values.autoCordon }}
+    auto_uncordon: {{ .Values.autoUncordon }}
+    dry_run: {{ .Values.dryRun }}
+    cordon_grace_period: {{ .Values.cordonGracePeriod }}
+    {{- if .Values.checkConfig }}
+    checks:
+      {{- toYaml .Values.checkConfig | nindent 6 }}
+    {{- end }}

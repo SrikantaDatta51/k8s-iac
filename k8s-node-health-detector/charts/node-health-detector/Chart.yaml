@@ -1,0 +1,15 @@
+apiVersion: v2
+name: node-health-detector
+description: Extensible Node Health Detection for Kubernetes GPU and CPU nodes
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - kubernetes
+  - node-health
+  - gpu
+  - dcgm
+  - monitoring
+  - node-problem-detector
+maintainers:
+  - name: Compute Platform Team

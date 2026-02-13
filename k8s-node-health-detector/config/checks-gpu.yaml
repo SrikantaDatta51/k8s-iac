@@ -1,0 +1,162 @@
+# Node Health Detector — GPU node check configuration
+# Severity: 0=P0_CRITICAL, 1=P1_HIGH, 2=P2_MEDIUM, 3=P3_LOW
+
+node_type: gpu
+interval: 60           # seconds between check cycles
+metrics_port: 9101
+auto_cordon: true
+auto_uncordon: false   # conservative: human must uncordon
+dry_run: false
+cordon_grace_period: 120  # seconds to wait before cordoning
+
+checks:
+  # ── GPU / DCGM ──────────────────────────────────────────
+  gpu_dcgm_overall_health:
+    enabled: true
+    severity: 0        # P0 — immediate cordon if DCGM reports unhealthy
+
+  gpu_ecc_errors:
+    enabled: true
+    severity: 0        # P0 — double-bit ECC = data corruption
+    sbe_threshold: 100 # single-bit threshold before warning
+
+  gpu_xid_errors:
+    enabled: true
+    severity: 0        # P0 — critical XIDs: 31,43,45,48,61-64,68,69,73,74,79,92,94,95,119,120
+
+  gpu_temperature:
+    enabled: true
+    severity: 1        # P1
+    critical_temp: 90  # Celsius — cordon threshold
+    warn_temp: 80      # Celsius — warning threshold
+    # B200 liquid-cooled: sustained max ~70C
+
+  gpu_nvlink_health:
+    enabled: true
+    severity: 1
+    error_threshold: 1000  # CRC/replay count before warning
+
+  gpu_pcie_health:
+    enabled: true
+    severity: 1
+    replay_threshold: 100
+
+  gpu_power_violation:
+    enabled: true
+    severity: 2
+
+  gpu_memory_utilization:
+    enabled: true
+    severity: 2
+    mem_threshold_pct: 95
+
+  gpu_row_remapping:
+    enabled: true
+    severity: 0        # P0 — row remap failure = HBM degradation
+
+  # ── Multi-Node / NVLink / IB ─────────────────────────────
+  multi_node_nccl_allreduce:
+    enabled: true
+    severity: 1
+    interval: 300       # every 5 min (heavy test)
+    nccl_binary: /usr/bin/all_reduce_perf
+    gpu_count: 8
+    min_bandwidth_gbps: 1530   # 85% of 1.8 TB/s (NVLink5)
+
+  multi_node_nvbandwidth:
+    enabled: true
+    severity: 1
+    interval: 600       # every 10 min
+    nvbandwidth_binary: /usr/bin/nvbandwidth
+    min_d2d_bandwidth_gbps: 1620  # 90% of 1800
+
+  gpu_topology_check:
+    enabled: true
+    severity: 0
+
+  infiniband_multi_port:
+    enabled: true
+    severity: 0         # P0 — any IB port down = cordon
+
+  infiniband_error_counters:
+    enabled: true
+    severity: 2
+    max_errors: 0       # strict: any error is warning
+
+  nvswitch_health:
+    enabled: true
+    severity: 0
+    expected_nvswitches: 4
+
+  # ── CPU ──────────────────────────────────────────────────
+  cpu_mce_errors:
+    enabled: true
+    severity: 0
+
+  cpu_thermal_throttle:
+    enabled: true
+    severity: 2
+    throttle_threshold: 100
+
+  cpu_load_average:
+    enabled: true
+    severity: 2
+    warn_ratio: 2.0
+    critical_ratio: 5.0
+
+  cpu_soft_lockup:
+    enabled: true
+    severity: 0
+
+  # ── Memory ───────────────────────────────────────────────
+  memory_ecc_errors:
+    enabled: true
+    severity: 0
+    ce_threshold: 1000
+
+  memory_pressure:
+    enabled: true
+    severity: 1
+    critical_pct: 95
+    warn_pct: 85
+
+  # ── Storage ──────────────────────────────────────────────
+  disk_smart_health:
+    enabled: true
+    severity: 1
+
+  filesystem_pressure:
+    enabled: true
+    severity: 1
+    mounts: ["/", "/var", "/var/lib/kubelet"]
+    critical_pct: 90
+    warn_pct: 80
+
+  disk_io_errors:
+    enabled: true
+    severity: 1
+
+  # ── Network ──────────────────────────────────────────────
+  nic_link_health:
+    enabled: true
+    severity: 1
+    error_threshold: 100
+    ignore_interfaces: []
+
+  infiniband_health:
+    enabled: true
+    severity: 0
+    ib_error_threshold: 100
+
+  # ── Kubernetes ───────────────────────────────────────────
+  kubelet_health:
+    enabled: true
+    severity: 0
+
+  container_runtime_health:
+    enabled: true
+    severity: 0
+
+  node_pressure_conditions:
+    enabled: true
+    severity: 1

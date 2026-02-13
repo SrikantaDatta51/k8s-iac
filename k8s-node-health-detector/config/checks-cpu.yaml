@@ -1,0 +1,80 @@
+# Node Health Detector — CPU node check configuration
+# GPU-specific checks are auto-skipped on CPU nodes (node_types filter)
+
+node_type: cpu
+interval: 60
+metrics_port: 9101
+auto_cordon: true
+auto_uncordon: false
+dry_run: false
+cordon_grace_period: 120
+
+checks:
+  # GPU checks auto-disabled on CPU nodes — no need to list them
+
+  # ── CPU ──────────────────────────────────────────────────
+  cpu_mce_errors:
+    enabled: true
+    severity: 0
+
+  cpu_thermal_throttle:
+    enabled: true
+    severity: 2
+    throttle_threshold: 100
+
+  cpu_load_average:
+    enabled: true
+    severity: 2
+    warn_ratio: 2.0
+    critical_ratio: 5.0
+
+  cpu_soft_lockup:
+    enabled: true
+    severity: 0
+
+  # ── Memory ───────────────────────────────────────────────
+  memory_ecc_errors:
+    enabled: true
+    severity: 0
+    ce_threshold: 1000
+
+  memory_pressure:
+    enabled: true
+    severity: 1
+    critical_pct: 95
+    warn_pct: 85
+
+  # ── Storage ──────────────────────────────────────────────
+  disk_smart_health:
+    enabled: true
+    severity: 1
+
+  filesystem_pressure:
+    enabled: true
+    severity: 1
+    mounts: ["/", "/var", "/var/lib/kubelet"]
+    critical_pct: 90
+    warn_pct: 80
+
+  disk_io_errors:
+    enabled: true
+    severity: 1
+
+  # ── Network ──────────────────────────────────────────────
+  nic_link_health:
+    enabled: true
+    severity: 1
+    error_threshold: 100
+
+  # ── Kubernetes ───────────────────────────────────────────
+  kubelet_health:
+    enabled: true
+    severity: 0
+
+  container_runtime_health:
+    enabled: true
+    severity: 0
+
+  node_pressure_conditions:
+    enabled: true
+    severity: 1

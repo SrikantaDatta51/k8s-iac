@@ -1,0 +1,44 @@
+# GPU node variant — use with: helm install -f values-gpu.yaml
+nodeType: gpu
+
+nodeSelector:
+  nvidia.com/gpu.present: "true"
+
+tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+checkConfig:
+  gpu_dcgm_overall_health:
+    enabled: true
+    severity: 0
+  gpu_ecc_errors:
+    enabled: true
+    severity: 0
+    sbe_threshold: 100
+  gpu_xid_errors:
+    enabled: true
+    severity: 0
+  gpu_temperature:
+    enabled: true
+    severity: 1
+    critical_temp: 90
+    warn_temp: 80
+  gpu_nvlink_health:
+    enabled: true
+    severity: 1
+  gpu_row_remapping:
+    enabled: true
+    severity: 0
+  multi_node_nccl_allreduce:
+    enabled: true
+    severity: 1
+    min_bandwidth_gbps: 1530
+  infiniband_multi_port:
+    enabled: true
+    severity: 0
+  nvswitch_health:
+    enabled: true
+    severity: 0
+    expected_nvswitches: 4

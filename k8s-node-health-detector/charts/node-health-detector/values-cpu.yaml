@@ -1,0 +1,28 @@
+# CPU node variant — use with: helm install -f values-cpu.yaml
+nodeType: cpu
+
+nodeSelector:
+  node-role.kubernetes.io/worker: ""
+
+tolerations: []
+
+checkConfig:
+  cpu_mce_errors:
+    enabled: true
+    severity: 0
+  cpu_thermal_throttle:
+    enabled: true
+    severity: 2
+  cpu_load_average:
+    enabled: true
+    severity: 2
+  memory_ecc_errors:
+    enabled: true
+    severity: 0
+  filesystem_pressure:
+    enabled: true
+    severity: 1
+    mounts: ["/", "/var", "/var/lib/kubelet"]
+  kubelet_health:
+    enabled: true
+    severity: 0

@@ -1,0 +1,94 @@
+# Default values for node-health-detector
+# Override with values-gpu.yaml or values-cpu.yaml
+
+replicaCount: 1  # DaemonSet — ignored, runs on all matching nodes
+
+image:
+  repository: ghcr.io/your-org/node-health-detector
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Node type: "gpu" or "cpu"
+nodeType: gpu
+
+# Check interval in seconds
+checkInterval: 60
+
+# Metrics port
+metricsPort: 9101
+
+# Auto-cordon on P0/P1 failures
+autoCordon: true
+# Auto-uncordon when all checks pass (conservative: false)
+autoUncordon: false
+# Dry-run mode: log actions but don't actually cordon
+dryRun: false
+# Grace period before cordoning (seconds)
+cordonGracePeriod: 120
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Node selector for DaemonSet placement
+nodeSelector: {}
+  # nvidia.com/gpu.present: "true"     # GPU nodes
+  # node.kubernetes.io/instance-type: "Standard_NC24ads_A100_v4"
+
+# Tolerations to run on tainted nodes (GPU nodes often have taints)
+tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+# Resource limits
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Prometheus ServiceMonitor
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  labels:
+    release: prometheus  # must match your kube-prometheus-stack release label
+
+# Pod security context (need host access for hardware checks)
+podSecurityContext:
+  runAsUser: 0
+  privileged: true
+
+# Mount host paths for hardware inspection
+hostPaths:
+  - name: sys
+    hostPath: /sys
+    mountPath: /host/sys
+    readOnly: true
+  - name: proc
+    hostPath: /proc
+    mountPath: /host/proc
+    readOnly: true
+  - name: dev
+    hostPath: /dev
+    mountPath: /host/dev
+    readOnly: true
+  - name: var-log
+    hostPath: /var/log
+    mountPath: /host/var/log
+    readOnly: true
+  - name: run-dmesg
+    hostPath: /run
+    mountPath: /host/run
+    readOnly: true
+
+# Check config override (merged with default config)
+checkConfig: {}
