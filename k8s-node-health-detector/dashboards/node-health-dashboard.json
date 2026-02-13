@@ -2237,7 +2237,7 @@
         },
         {
             "type": "row",
-            "title": "CPU, Memory, Storage Health",
+            "title": "Day 0 \u2014 Provisioning Health",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
@@ -2250,8 +2250,8 @@
         },
         {
             "id": 29,
-            "title": "CPU/Memory/Storage Check Status",
-            "description": "All non-GPU component checks over time.",
+            "title": "Day 0 Provisioning Check Status",
+            "description": "SR-IOV VF status, GPU Operator, Network Operator, BIOS audit, driver versions. Failures here are Job Blockers \u2014 pods stay Pending.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -2302,13 +2302,750 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "node_health_check_status{node=~\"$node\", component=~\"cpu|memory|storage\"}",
+                    "expr": "node_health_check_status{node=~\"$node\", check=~\"day0_.*\"}",
                     "legendFormat": "{{check}}"
                 }
             ]
         },
         {
             "id": 30,
+            "title": "Day 0 Cordon Signals",
+            "description": "Day 0 checks requesting cordon: SR-IOV VF stuck, GPU driver failure.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 66
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Cordon (1=yes)",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_health_check_cordon{node=~\"$node\", check=~\"day0_.*\"}",
+                    "legendFormat": "{{check}}"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "Day 1 \u2014 Runtime & Performance",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 74
+            },
+            "id": 31,
+            "panels": []
+        },
+        {
+            "id": 32,
+            "title": "Day 1 Silent Killers (Orange X)",
+            "description": "Performance degradation checks: PCIe gen/width, GPU clock throttle, IB link flapping. Don't crash jobs but cause 30-90% perf loss.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 75
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Status (0=pass, 2=fail)",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_health_check_status{node=~\"$node\", check=~\"day1_.*\"}",
+                    "legendFormat": "{{check}}"
+                }
+            ]
+        },
+        {
+            "id": 33,
+            "title": "Day 1 Hard Failures (Red X)",
+            "description": "Job killers: HCA fault, Subnet Manager down, XID 48/79. These crash or hang multi-day training runs.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 75
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Cordon (1=yes)",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_health_check_cordon{node=~\"$node\", check=~\"day1_.*\"}",
+                    "legendFormat": "{{check}}"
+                }
+            ]
+        },
+        {
+            "id": 34,
+            "title": "XID Error Timeline (from DCGM Exporter)",
+            "description": "XID errors across all GPUs on this node. Critical XIDs: 48, 79, 74, 61-64, 94-95. Any spike = investigate.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 83
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "XID Error Count",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "DCGM_FI_DEV_XID_ERRORS",
+                    "legendFormat": "GPU {{gpu}} XID"
+                }
+            ]
+        },
+        {
+            "id": 35,
+            "title": "PCIe Generation per GPU (from DCGM Exporter)",
+            "description": "Current PCIe generation. Expected: Gen5 (5). Gen4 = 50% bandwidth loss. Gen3 = 75% loss.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 91
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "PCIe Generation",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "DCGM_FI_DEV_PCIE_LINK_GEN",
+                    "legendFormat": "GPU {{gpu}} Gen"
+                }
+            ]
+        },
+        {
+            "id": 36,
+            "title": "PCIe Link Width per GPU (from DCGM Exporter)",
+            "description": "Current PCIe width. Expected: x16. x8 = 50% bandwidth loss.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 91
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "PCIe Width",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "DCGM_FI_DEV_PCIE_LINK_WIDTH",
+                    "legendFormat": "GPU {{gpu}} Width"
+                }
+            ]
+        },
+        {
+            "id": 37,
+            "title": "GPU SM Clock \u2014 Current vs Max (from DCGM Exporter)",
+            "description": "Clock delta > 10% = throttling (Silent Killer). Causes 30-90% perf degradation without crashing.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 99
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "MHz",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "DCGM_FI_DEV_SM_CLOCK",
+                    "legendFormat": "GPU {{gpu}} Current SM"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "DCGM_FI_DEV_MAX_SM_CLOCK",
+                    "legendFormat": "GPU {{gpu}} Max SM"
+                }
+            ]
+        },
+        {
+            "id": 38,
+            "title": "Thermal & Power Violations (from DCGM Exporter)",
+            "description": "Thermal violation (clock throttle) and power violation (power cap). Values in microseconds of throttle time.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 99
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Violation (us)",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byRegexp",
+                            "options": ".*Thermal.*"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "#E0663E",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byRegexp",
+                            "options": ".*Power.*"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "#E0A939",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "DCGM_FI_DEV_THERMAL_VIOLATION",
+                    "legendFormat": "GPU {{gpu}} Thermal"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "DCGM_FI_DEV_POWER_VIOLATION",
+                    "legendFormat": "GPU {{gpu}} Power"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "Fabric & InfiniBand Health",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 107
+            },
+            "id": 39,
+            "panels": []
+        },
+        {
+            "id": 40,
+            "title": "Fabric Certification Check Status",
+            "description": "LID assignment, MTU parity, HCA traffic balance, IB bandwidth. All must PASS for node to be AI Ready.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 108
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Status (0=pass, 2=fail)",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_health_check_status{node=~\"$node\", check=~\"fabric_.*\"}",
+                    "legendFormat": "{{check}}"
+                }
+            ]
+        },
+        {
+            "id": 41,
+            "title": "Throughput per HCA Port",
+            "description": "Identifies straggler nodes that slow down collectives. All 8 HCAs should show roughly equal traffic. Silent HCA = Red X.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 108
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Status",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_health_check_status{node=~\"$node\", check=\"fabric_hca_traffic_balance\"}",
+                    "legendFormat": "HCA Balance Check"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "CPU, Memory, Storage Health",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 116
+            },
+            "id": 42,
+            "panels": []
+        },
+        {
+            "id": 43,
+            "title": "CPU/Memory/Storage Check Status",
+            "description": "All non-GPU component checks over time.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 117
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Status (0=pass, 2=fail)",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "node_health_check_status{node=~\"$node\", component=~\"cpu|memory|storage\"}",
+                    "legendFormat": "{{check}}"
+                }
+            ]
+        },
+        {
+            "id": 44,
             "title": "Network & Kubernetes Check Status",
             "description": "Network interface and Kubernetes component checks.",
             "type": "timeseries",
@@ -2320,7 +3057,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 66
+                "y": 117
             },
             "fieldConfig": {
                 "defaults": {
@@ -2374,13 +3111,13 @@
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 74
+                "y": 125
             },
-            "id": 31,
+            "id": 45,
             "panels": []
         },
         {
-            "id": 32,
+            "id": 46,
             "title": "P0 Critical",
             "description": "Number of checks at severity P0 Critical",
             "type": "stat",
@@ -2392,7 +3129,7 @@
                 "h": 3,
                 "w": 6,
                 "x": 0,
-                "y": 75
+                "y": 126
             },
             "fieldConfig": {
                 "defaults": {
@@ -2440,7 +3177,7 @@
             ]
         },
         {
-            "id": 33,
+            "id": 47,
             "title": "P1 High",
             "description": "Number of checks at severity P1 High",
             "type": "stat",
@@ -2452,7 +3189,7 @@
                 "h": 3,
                 "w": 6,
                 "x": 6,
-                "y": 75
+                "y": 126
             },
             "fieldConfig": {
                 "defaults": {
@@ -2500,7 +3237,7 @@
             ]
         },
         {
-            "id": 34,
+            "id": 48,
             "title": "P2 Medium",
             "description": "Number of checks at severity P2 Medium",
             "type": "stat",
@@ -2512,7 +3249,7 @@
                 "h": 3,
                 "w": 6,
                 "x": 12,
-                "y": 75
+                "y": 126
             },
             "fieldConfig": {
                 "defaults": {
@@ -2560,7 +3297,7 @@
             ]
         },
         {
-            "id": 35,
+            "id": 49,
             "title": "P3 Low",
             "description": "Number of checks at severity P3 Low",
             "type": "stat",
@@ -2572,7 +3309,7 @@
                 "h": 3,
                 "w": 6,
                 "x": 18,
-                "y": 75
+                "y": 126
             },
             "fieldConfig": {
                 "defaults": {
@@ -2620,7 +3357,7 @@
             ]
         },
         {
-            "id": 36,
+            "id": 50,
             "title": "Failing Checks by Severity Over Time",
             "description": "Count of checks in FAIL or WARN state, grouped by severity level.",
             "type": "timeseries",
@@ -2632,7 +3369,7 @@
                 "h": 8,
                 "w": 24,
                 "x": 0,
-                "y": 78
+                "y": 129
             },
             "fieldConfig": {
                 "defaults": {
@@ -2763,13 +3500,13 @@
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 86
+                "y": 137
             },
-            "id": 37,
+            "id": 51,
             "panels": []
         },
         {
-            "id": 38,
+            "id": 52,
             "title": "Node Cordon Signal Over Time",
             "description": "1 = detector recommends cordoning. 0 = healthy. Sustained 1 triggers automatic cordon after grace period.",
             "type": "timeseries",
@@ -2781,7 +3518,7 @@
                 "h": 6,
                 "w": 24,
                 "x": 0,
-                "y": 87
+                "y": 138
             },
             "fieldConfig": {
                 "defaults": {
@@ -2848,7 +3585,7 @@
             ]
         },
         {
-            "id": 39,
+            "id": 53,
             "title": "Last Check Run",
             "description": "Unix timestamp of the most recent check cycle",
             "type": "stat",
@@ -2860,7 +3597,7 @@
                 "h": 3,
                 "w": 8,
                 "x": 0,
-                "y": 93
+                "y": 144
             },
             "fieldConfig": {
                 "defaults": {
@@ -2908,7 +3645,7 @@
             ]
         },
         {
-            "id": 40,
+            "id": 54,
             "title": "Check Cycle Freshness",
             "description": "How many seconds since last check. Should be < check interval.",
             "type": "stat",
@@ -2920,7 +3657,7 @@
                 "h": 3,
                 "w": 8,
                 "x": 8,
-                "y": 93
+                "y": 144
             },
             "fieldConfig": {
                 "defaults": {
@@ -2976,7 +3713,7 @@
             ]
         },
         {
-            "id": 41,
+            "id": 55,
             "title": "Node Health Status",
             "description": "1 = all checks passing, 0 = one or more checks failing",
             "type": "stat",
@@ -2988,7 +3725,7 @@
                 "h": 3,
                 "w": 8,
                 "x": 16,
-                "y": 93
+                "y": 144
             },
             "fieldConfig": {
                 "defaults": {

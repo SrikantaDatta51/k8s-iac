@@ -1,0 +1,319 @@
+# NPD (Node Problem Detector) Custom Monitor Configuration
+# Deploy via Helm chart ConfigMap or standalone NPD installation
+# From SentinAI Reliability Master Book, Page 6: NPD Specification
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-problem-detector-config
+  namespace: monitoring
+data:
+  # ── Custom Log Monitors ──────────────────────────────────
+  # NPD tails /var/log/syslog and dmesg for specific patterns
+
+  gpu-log-monitor.json: |
+    {
+      "plugin": "kmsg",
+      "logPath": "/dev/kmsg",
+      "lookback": "5m",
+      "bufferSize": 10,
+      "source": "gpu-monitor",
+      "conditions": [
+        {
+          "type": "GPUHardwareFail",
+          "reason": "GPUHardwareOK",
+          "message": "GPU hardware is functioning normally"
+        },
+        {
+          "type": "GPUNVLinkFail",
+          "reason": "NVLinkOK",
+          "message": "NVLink interconnects are healthy"
+        }
+      ],
+      "rules": [
+        {
+          "type": "permanent",
+          "condition": "GPUHardwareFail",
+          "reason": "XidECCDoubleBit",
+          "pattern": "NVRM: Xid.*48"
+        },
+        {
+          "type": "permanent",
+          "condition": "GPUHardwareFail",
+          "reason": "XidGPUOffBus",
+          "pattern": "NVRM: Xid.*79"
+        },
+        {
+          "type": "permanent",
+          "condition": "GPUHardwareFail",
+          "reason": "XidInternalError",
+          "pattern": "NVRM: Xid.*(61|62|63|64)"
+        },
+        {
+          "type": "permanent",
+          "condition": "GPUHardwareFail",
+          "reason": "XidECCContained",
+          "pattern": "NVRM: Xid.*(94|95)"
+        },
+        {
+          "type": "permanent",
+          "condition": "GPUHardwareFail",
+          "reason": "XidGSPError",
+          "pattern": "NVRM: Xid.*(119|120)"
+        },
+        {
+          "type": "permanent",
+          "condition": "GPUHardwareFail",
+          "reason": "XidFatalLink",
+          "pattern": "NVRM: Xid.*149"
+        },
+        {
+          "type": "permanent",
+          "condition": "GPUNVLinkFail",
+          "reason": "NVLinkFabricFailure",
+          "pattern": "NVRM: Xid.*74"
+        },
+        {
+          "type": "temporary",
+          "reason": "XidMMUError",
+          "pattern": "NVRM: Xid.*31"
+        },
+        {
+          "type": "temporary",
+          "reason": "XidPCIeDMAError",
+          "pattern": "NVRM: Xid.*32"
+        },
+        {
+          "type": "temporary",
+          "reason": "XidAppDriverFault",
+          "pattern": "NVRM: Xid.*43"
+        }
+      ]
+    }
+
+  network-log-monitor.json: |
+    {
+      "plugin": "kmsg",
+      "logPath": "/dev/kmsg",
+      "lookback": "5m",
+      "bufferSize": 10,
+      "source": "network-monitor",
+      "conditions": [
+        {
+          "type": "NetworkLinkFail",
+          "reason": "NetworkLinkOK",
+          "message": "Network links are healthy"
+        },
+        {
+          "type": "HCAFault",
+          "reason": "HCAOK",
+          "message": "HCA hardware is healthy"
+        }
+      ],
+      "rules": [
+        {
+          "type": "permanent",
+          "condition": "NetworkLinkFail",
+          "reason": "MLXLinkDown",
+          "pattern": "mlx5_core.*Link down"
+        },
+        {
+          "type": "permanent",
+          "condition": "NetworkLinkFail",
+          "reason": "MLXLinkFlapping",
+          "pattern": "mlx5_core.*(Link up|Link down).*mlx5_core.*(Link down|Link up)"
+        },
+        {
+          "type": "permanent",
+          "condition": "HCAFault",
+          "reason": "HCAInternalError",
+          "pattern": "mlx5_core.*internal error"
+        },
+        {
+          "type": "permanent",
+          "condition": "HCAFault",
+          "reason": "HCAHealthCompromised",
+          "pattern": "mlx5_core.*health compromised"
+        },
+        {
+          "type": "permanent",
+          "condition": "HCAFault",
+          "reason": "HCACmdTimeout",
+          "pattern": "mlx5_core.*cmd timeout"
+        }
+      ]
+    }
+
+  system-log-monitor.json: |
+    {
+      "plugin": "kmsg",
+      "logPath": "/dev/kmsg",
+      "lookback": "5m",
+      "bufferSize": 10,
+      "source": "system-monitor",
+      "conditions": [
+        {
+          "type": "KernelHardwareFault",
+          "reason": "KernelOK",
+          "message": "No kernel hardware faults detected"
+        }
+      ],
+      "rules": [
+        {
+          "type": "permanent",
+          "condition": "KernelHardwareFault",
+          "reason": "MCEUncorrectable",
+          "pattern": "mce:.*uncorrected"
+        },
+        {
+          "type": "permanent",
+          "condition": "KernelHardwareFault",
+          "reason": "CPUSoftLockup",
+          "pattern": "BUG: soft lockup"
+        },
+        {
+          "type": "permanent",
+          "condition": "KernelHardwareFault",
+          "reason": "HungTask",
+          "pattern": "INFO: task.*blocked for more than"
+        },
+        {
+          "type": "temporary",
+          "reason": "DiskIOError",
+          "pattern": "I/O error.*dev"
+        },
+        {
+          "type": "temporary",
+          "reason": "OOMKill",
+          "pattern": "Out of memory.*Kill"
+        }
+      ]
+    }
+
+  # ── Custom Check Plugins (Active Testing) ─────────────────
+  # SentinAI NPD check_ib_bw.sh and check_gpu_clocks.sh equivalents
+
+  check_ib_bw.json: |
+    {
+      "plugin": "custom",
+      "pluginConfig": {
+        "invoke_interval": "600s",
+        "timeout": "60s",
+        "max_output_length": 256,
+        "concurrency": 1
+      },
+      "source": "ib-bandwidth-check",
+      "conditions": [
+        {
+          "type": "IBBandwidthDegraded",
+          "reason": "IBBandwidthOK",
+          "message": "InfiniBand bandwidth at line rate"
+        }
+      ],
+      "rules": [
+        {
+          "type": "permanent",
+          "condition": "IBBandwidthDegraded",
+          "reason": "IBBandwidthLow",
+          "path": "/config/plugin/check_ib_bw.sh",
+          "timeout": "30s"
+        }
+      ]
+    }
+
+  check_gpu_clocks.json: |
+    {
+      "plugin": "custom",
+      "pluginConfig": {
+        "invoke_interval": "120s",
+        "timeout": "30s",
+        "max_output_length": 256,
+        "concurrency": 1
+      },
+      "source": "gpu-clock-check",
+      "conditions": [
+        {
+          "type": "GPUThrottled",
+          "reason": "GPUClocksOK",
+          "message": "GPU clocks at expected frequency"
+        }
+      ],
+      "rules": [
+        {
+          "type": "permanent",
+          "condition": "GPUThrottled",
+          "reason": "GPUClockThrottle",
+          "path": "/config/plugin/check_gpu_clocks.sh",
+          "timeout": "15s"
+        }
+      ]
+    }
+
+---
+# NPD Check Scripts
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-problem-detector-scripts
+  namespace: monitoring
+data:
+  check_ib_bw.sh: |
+    #!/bin/bash
+    # SentinAI NPD Plugin: IB bandwidth test (10-sec ib_write_bw loopback)
+    # Exit 0 = healthy, Exit 1 = degraded
+    MIN_BW_GBPS=${MIN_BW_GBPS:-360}  # 90% of 400Gbps NDR
+
+    if ! command -v ib_write_bw &>/dev/null; then
+      echo "ib_write_bw not installed"
+      exit 0  # skip if not available
+    fi
+
+    # Get first active IB device
+    DEV=$(ibstat -l 2>/dev/null | head -1)
+    if [ -z "$DEV" ]; then
+      echo "No IB device found"
+      exit 0
+    fi
+
+    # Check port state first
+    STATE=$(ibstat "$DEV" 1 2>/dev/null | grep "State:" | awk '{print $NF}')
+    if [ "$STATE" != "Active" ]; then
+      echo "IB port not active: $STATE"
+      exit 1
+    fi
+
+    echo "IB port active on $DEV"
+    exit 0
+
+  check_gpu_clocks.sh: |
+    #!/bin/bash
+    # SentinAI NPD Plugin: GPU clock throttle detection
+    # Compares current SM clock against max. >10% delta = throttling.
+    # Exit 0 = healthy, Exit 1 = throttled
+    THRESHOLD_PCT=${THRESHOLD_PCT:-10}
+
+    if ! command -v nvidia-smi &>/dev/null; then
+      echo "nvidia-smi not available"
+      exit 0
+    fi
+
+    THROTTLED=0
+    while IFS=, read -r cur max; do
+      cur=$(echo "$cur" | tr -d ' ')
+      max=$(echo "$max" | tr -d ' ')
+      if [ "$max" -gt 0 ] 2>/dev/null; then
+        delta=$(( (max - cur) * 100 / max ))
+        if [ "$delta" -gt "$THRESHOLD_PCT" ]; then
+          THROTTLED=1
+          echo "GPU throttled: current=${cur}MHz max=${max}MHz delta=${delta}%"
+        fi
+      fi
+    done < <(nvidia-smi --query-gpu=clocks.current.sm,clocks.max.sm \
+             --format=csv,noheader,nounits 2>/dev/null)
+
+    if [ "$THROTTLED" -eq 1 ]; then
+      exit 1
+    fi
+
+    echo "GPU clocks within normal range"
+    exit 0

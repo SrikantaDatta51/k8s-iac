@@ -1,131 +1,217 @@
-# Node Health Detector
+# SentinAI Node Health Detector
 
-**Extensible node health detection engine for Kubernetes GPU and CPU infrastructure.**
+**Extensible, autonomous node health detection engine for Kubernetes AI infrastructure.**
 
-Runs as a DaemonSet on every node, executing hardware and software health checks on a configurable schedule. Exposes results as Prometheus metrics, triggers automatic node cordon on critical failures, and provides a professional Grafana dashboard.
+SentinAI is designed to move from **Alert → Pinpoint Diagnosis in under 120 seconds**. It shifts observability to the edge using a DaemonSet agent on every node, executing hardware and software health checks on a configurable schedule. Results are exposed as Prometheus metrics, with automatic node cordon on critical failures and a professional 55-panel Grafana dashboard.
+
+A node is only **"AI Ready"** when the high-speed InfiniBand fabric, NVLink interconnects, and GPU drivers are not just present, but performing at peak theoretical bandwidth.
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         K8s Cluster                             │
-│                                                                 │
-│  ┌───────────────────────────────┐  ┌────────────────────────┐  │
-│  │  GPU Node (DaemonSet Pod)     │  │   CPU Node (DaemonSet) │  │
-│  │                               │  │                        │  │
-│  │  ┌─────────────────────────┐  │  │  ┌──────────────────┐  │  │
-│  │  │ Agent (agent.py)        │  │  │  │ Agent            │  │  │
-│  │  │  ├─ Check Runner        │  │  │  │  ├─ CPU checks   │  │  │
-│  │  │  │  ├─ GPU checks (10)  │  │  │  │  ├─ Memory      │  │  │
-│  │  │  │  ├─ Multi-node (6)   │  │  │  │  ├─ Storage     │  │  │
-│  │  │  │  ├─ CPU checks (4)   │  │  │  │  ├─ Network     │  │  │
-│  │  │  │  ├─ Memory (2)       │  │  │  │  └─ Kubernetes  │  │  │
-│  │  │  │  ├─ Storage (3)      │  │  │  │                  │  │  │
-│  │  │  │  ├─ Network (2)      │  │  │  ├─ Prometheus     │  │  │
-│  │  │  │  └─ Kubernetes (3)   │  │  │  │  Exporter :9101 │  │  │
-│  │  │  │                      │  │  │  │                  │  │  │
-│  │  │  ├─ Prometheus Exporter │  │  │  └─ Node Controller│  │  │
-│  │  │  │  (port 9101)         │  │  │     (cordon/       │  │  │
-│  │  │  │                      │  │  │      uncordon)     │  │  │
-│  │  │  └─ Node Controller     │  │  └──────────────────┘  │  │
-│  │  │     (cordon/uncordon)   │  │                        │  │
-│  │  └─────────────────────────┘  │                        │  │
-│  └───────────────────────────────┘  └────────────────────────┘  │
-│                                                                 │
-│  ┌─────────────┐    ┌───────────────┐    ┌──────────────────┐  │
-│  │ Prometheus   │◄───│ ServiceMonitor│    │ Grafana          │  │
-│  │ (scrape)     │    │ (auto-disc.)  │    │ Dashboard        │  │
-│  └──────┬───────┘    └───────────────┘    │ (41 panels)      │  │
-│         │                                 └──────────────────┘  │
-│         └─────────────────────────────────────────►             │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                         K8s Cluster                                 │
+│                                                                     │
+│  ┌──────────────────────────────┐  ┌─────────────────────────────┐  │
+│  │  GPU Node (DaemonSet Pod)    │  │  CPU Node (DaemonSet Pod)   │  │
+│  │                              │  │                             │  │
+│  │  ┌─────────────────────┐    │  │  ┌────────────────────┐    │  │
+│  │  │ SentinAI Agent      │    │  │  │ SentinAI Agent     │    │  │
+│  │  │ ├─ Day 0 Checks (5) │    │  │  │ ├─ CPU checks (4)  │    │  │
+│  │  │ ├─ Day 1 Checks (5) │    │  │  │ ├─ Memory (2)      │    │  │
+│  │  │ ├─ DCGM/GPU (10)    │    │  │  │ ├─ Storage (3)     │    │  │
+│  │  │ ├─ Multi-Node (6)   │    │  │  │ ├─ Network (2)     │    │  │
+│  │  │ ├─ Fabric (4)       │    │  │  │ └─ Kubernetes (3)  │    │  │
+│  │  │ ├─ CPU/Mem/Disk     │    │  │  │                    │    │  │
+│  │  │ ├─ Network/K8s      │    │  │  ├─ Prometheus :9101  │    │  │
+│  │  │ │                   │    │  │  └─ Node Controller   │    │  │
+│  │  │ ├─ Prometheus :9101 │    │  └─────────────────────────────┘  │
+│  │  │ ├─ SRE Bot          │    │                                   │
+│  │  │ │  (remediation)    │    │  ┌──────────────────────────────┐ │
+│  │  │ └─ Node Controller  │    │  │ NPD (Node Problem Detector)  │ │
+│  │  └─────────────────────┘    │  │ ├─ GPU XID Log Monitor       │ │
+│  └──────────────────────────────┘  │ ├─ Network Log Monitor      │ │
+│                                     │ ├─ System Log Monitor       │ │
+│  ┌────────────┐  ┌──────────────┐  │ ├─ check_ib_bw.sh          │ │
+│  │ Prometheus  │  │ Grafana      │  │ └─ check_gpu_clocks.sh     │ │
+│  │ (scrape)    │  │ "4K Sharp"   │  └──────────────────────────────┘ │
+│  │             │  │ (55 panels)  │                                   │
+│  └──────┬──────┘  └──────────────┘                                   │
+│         └────────────────────────────────►                           │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Check Registry
+---
 
-### GPU Health (GPU nodes only) — 16 checks
+## The 4-Layer Analysis Model
+
+| Layer | Phase | What it Catches | Check Modules |
+|:------|:------|:----------------|:--------------|
+| **Layer 1: Day 0 Provisioning** | Job Blockers | VF stuck, driver mismatch, BIOS, operators | `day0_provisioning.py` |
+| **Layer 2: Day 1 Silent Killers** | Performance (30-90% loss) | PCIe training, clock throttle, IB flap | `day1_silent_killers.py` |
+| **Layer 3: Day 1 Hard Failures** | Job Crash | XID 48/79, HCA fault, SM partition | `dcgm_health.py`, `day1_silent_killers.py` |
+| **Layer 4: Fabric & Collective** | Straggler Detection | LID, MTU, HCA balance, NCCL BW | `fabric_health.py`, `multi_node.py` |
+
+---
+
+## Check Registry — 44 Checks
+
+### Day 0: Provisioning (GPU nodes) — 5 checks
 
 | Check | Severity | Source | Cordon | Description |
 |:------|:---------|:-------|:-------|:------------|
-| `gpu_dcgm_overall_health` | P0 | DCGM | Yes | DCGM_FI_DEV_GPU_HEALTH status |
-| `gpu_ecc_errors` | P0 | DCGM | Yes (DBE) | Double-bit ECC (uncorrectable) = data corruption |
-| `gpu_xid_errors` | P0 | dmesg | Yes | Critical XIDs: 31,43,45,48,61-64,68,69,73,74,79,92,94,95,119,120 |
-| `gpu_temperature` | P1 | DCGM | Yes (>90C) | GPU temp monitoring. B200 liquid: max 70C sustained |
-| `gpu_nvlink_health` | P1 | DCGM | Yes (recovery) | NVLink CRC, replay, recovery errors |
+| `day0_sriov_vf_status` | P0 | sysfs | Yes | VF stuck in INIT = BIOS/IOMMU failure |
+| `day0_gpu_operator` | P0 | nvidia-smi | Yes | GPU count, fabricmanager, DCGM agent |
+| `day0_network_operator` | P0 | lsmod | Yes | mlx5_core, ib_uverbs, Multus CNI |
+| `day0_bios_audit` | P1 | /proc + lspci | Warn | IOMMU, ARI Forwarding, HugePages |
+| `day0_driver_version` | P1 | nvidia-smi + ofed_info | No | GPU/MOFED version vs fleet baseline |
+
+### Day 1: Silent Killers & Hard Failures (GPU nodes) — 5 checks
+
+| Check | Severity | Marker | Cordon | Description |
+|:------|:---------|:-------|:-------|:------------|
+| `day1_pcie_training` | P1 | Orange X | Yes | Gen5 x16 expected; Gen4/x8 = 30-50% BW loss |
+| `day1_gpu_clock_throttle` | P2 | Orange X | Warn | SM clock >10% below max = throttling |
+| `day1_ib_link_flapping` | P1 | Orange X | Yes | mlx5_core Link down events → NCCL retransmits |
+| `day1_hca_fault` | P0 | Red X | Yes | ConnectX-7 panic/assert/health compromised |
+| `day1_subnet_manager` | P0 | Red X | Yes | SM down = all RDMA blackholed |
+
+### GPU/DCGM Checks (GPU nodes) — 10 checks
+
+| Check | Severity | Source | Cordon | Description |
+|:------|:---------|:-------|:-------|:------------|
+| `gpu_dcgm_overall_health` | P0 | DCGM | Yes | DCGM_FI_DEV_GPU_HEALTH |
+| `gpu_ecc_errors` | P0 | DCGM | Yes (DBE) | Double-bit ECC = data corruption |
+| `gpu_xid_errors` | P0 | dmesg | Yes | XIDs: 31,43,45,48,61-64,68,69,73,74,79,92,94,95,119,120 |
+| `gpu_temperature` | P1 | DCGM | Yes (>90C) | Liquid-cooled B200: max 70C sustained |
+| `gpu_nvlink_health` | P1 | DCGM | Yes | NVLink CRC, replay, recovery errors |
 | `gpu_pcie_health` | P1 | DCGM | Warn | PCIe replay counter |
 | `gpu_power_violation` | P2 | DCGM | No | Power/thermal throttling duration |
-| `gpu_memory_utilization` | P2 | DCGM | No | GPU framebuffer usage (>95%) |
+| `gpu_memory_utilization` | P2 | DCGM | No | GPU framebuffer >95% |
 | `gpu_row_remapping` | P0 | DCGM | Yes | HBM row remap pending/failure |
-| `multi_node_nccl_allreduce` | P1 | nccl-tests | Yes | All-Reduce BusBW >= 1530 GB/s (85% of NVLink5) |
+
+### Multi-Node & NVLink (GPU nodes) — 6 checks
+
+| Check | Severity | Source | Cordon | Description |
+|:------|:---------|:-------|:-------|:------------|
+| `multi_node_nccl_allreduce` | P1 | nccl-tests | Yes | BusBW >= 1530 GB/s (85% NVLink5) |
 | `multi_node_nvbandwidth` | P1 | nvbandwidth | Yes | D2D >= 1620 GB/s (90% of 1.8 TB/s) |
 | `gpu_topology_check` | P0 | nvidia-smi | Yes | All NVLinks active, NVSwitch topology |
 | `infiniband_multi_port` | P0 | ibstat | Yes | All IB ports Active at NDR 400Gb/s |
 | `infiniband_error_counters` | P2 | perfquery | Warn | SymbolError, LinkRecover, RcvErrors |
-| `nvswitch_health` | P0 | dcgmi | Yes | NVSwitch count matches expected (default: 4) |
+| `nvswitch_health` | P0 | dcgmi | Yes | NVSwitch count matches expected |
 
-### CPU Health (all nodes) — 4 checks
-
-| Check | Severity | Source | Cordon | Description |
-|:------|:---------|:-------|:-------|:------------|
-| `cpu_mce_errors` | P0 | dmesg | Yes (uncorrectable) | Machine Check Exceptions |
-| `cpu_thermal_throttle` | P2 | sysfs | No | core_throttle_count from thermal_throttle |
-| `cpu_load_average` | P2 | /proc/loadavg | No | Load relative to CPU count |
-| `cpu_soft_lockup` | P0 | dmesg | Yes | Kernel soft lockup / hung task |
-
-### Memory Health (all nodes) — 2 checks
+### Fabric Certification (GPU nodes) — 4 checks
 
 | Check | Severity | Source | Cordon | Description |
 |:------|:---------|:-------|:-------|:------------|
-| `memory_ecc_errors` | P0 | EDAC sysfs | Yes (UE) | Uncorrectable = DIMM failure |
-| `memory_pressure` | P1 | /proc/meminfo | No | MemAvailable percentage |
+| `fabric_lid_assignment` | P0 | ibstat | Yes | Every port must have a unique LID from SM |
+| `fabric_mtu_parity` | P1 | ibstat | No | Switch at 4096, node at 1500 = packet drops |
+| `fabric_hca_traffic_balance` | P0 | sysfs | Yes | Silent HCA = straggler in collective |
+| `fabric_ib_bandwidth` | P1 | ib_write_bw | Yes | Active BW test >= 360 Gb/s (90% of NDR 400G) |
 
-### Storage Health (all nodes) — 3 checks
+### CPU, Memory, Storage, Network, K8s (all nodes) — 14 checks
 
-| Check | Severity | Source | Cordon | Description |
-|:------|:---------|:-------|:-------|:------------|
-| `disk_smart_health` | P1 | smartctl | Yes | SMART failure prediction |
-| `filesystem_pressure` | P1 | statvfs | Yes (>90%) | /, /var, /var/lib/kubelet usage |
-| `disk_io_errors` | P1 | dmesg | Yes (>10) | Kernel I/O error messages |
-
-### Network Health (all nodes) — 2 checks
-
-| Check | Severity | Source | Cordon | Description |
-|:------|:---------|:-------|:-------|:------------|
-| `nic_link_health` | P1 | sysfs | Warn | Interface link state, rx/tx errors |
-| `infiniband_health` | P0 | sysfs + perfquery | Yes | HCA port state, error counters |
-
-### Kubernetes Health (all nodes) — 3 checks
-
-| Check | Severity | Source | Cordon | Description |
-|:------|:---------|:-------|:-------|:------------|
-| `kubelet_health` | P0 | systemctl + healthz | Yes | Kubelet process and health endpoint |
-| `container_runtime_health` | P0 | systemctl | Yes | containerd/CRI-O process status |
-| `node_pressure_conditions` | P1 | kubectl | No | MemoryPressure, DiskPressure, PIDPressure |
+| Check | Severity | Source | Cordon |
+|:------|:---------|:-------|:-------|
+| `cpu_mce_errors` | P0 | dmesg | Yes (uncorrectable) |
+| `cpu_thermal_throttle` | P2 | sysfs | No |
+| `cpu_load_average` | P2 | /proc/loadavg | No |
+| `cpu_soft_lockup` | P0 | dmesg | Yes |
+| `memory_ecc_errors` | P0 | EDAC sysfs | Yes (UE) |
+| `memory_pressure` | P1 | /proc/meminfo | No |
+| `disk_smart_health` | P1 | smartctl | Yes |
+| `filesystem_pressure` | P1 | statvfs | Yes (>90%) |
+| `disk_io_errors` | P1 | dmesg | Yes |
+| `nic_link_health` | P1 | sysfs | Warn |
+| `infiniband_health` | P0 | perfquery | Yes |
+| `kubelet_health` | P0 | healthz | Yes |
+| `container_runtime_health` | P0 | systemctl | Yes |
+| `node_pressure_conditions` | P1 | kubectl | No |
 
 ---
 
-## Severity Classification
+## XID Encyclopedia (from SentinAI Page 4)
 
-| Level | Label | Response | Example |
-|:------|:------|:---------|:--------|
-| **P0** | Critical | Immediate cordon + alert (120s grace) | GPU ECC DBE, XID 79, MCE uncorrectable |
-| **P1** | High | Cordon + investigate within 4h | Temperature > 90C, SMART failure, NVLink recovery |
-| **P2** | Medium | Warning + investigate within 24h | Thermal throttle, elevated SBE, PCIe replay |
-| **P3** | Low | Informational — weekly review | NVMe spare < 80%, minor load elevation |
+The SRE Bot maps kernel XIDs to specific hardware components:
+
+| XID | Category | Component | Root Cause | Action |
+|:----|:---------|:----------|:-----------|:-------|
+| 31 | MMU | Memory | GPU MMU error (invalid access) | Cordon |
+| 32 | Bus | PCIe | DMA controller error; PCIe signal quality | Cordon |
+| 43 | App/Driver | Compute | GPU stopped processing; software fault | Warn |
+| 48 | **Critical** | **VRAM** | **Double-Bit ECC: unrecoverable** | **Cordon + Taint** |
+| 61 | Internal | GPU | Microcontroller error (FW/HW) | Cordon |
+| 74 | Interconnect | **NVLink** | **NVLink fabric failure** | **Cordon** |
+| 79 | Bus | **PCIe** | **GPU Fallen off Bus** | **Cordon + Taint** |
+| 94 | Internal | GPU | Contained ECC (row remap recommended) | Cordon |
+| 95 | Internal | GPU | Uncontained ECC (data corruption) | Cordon |
+| 119 | Internal | GPU | GSP firmware error | Cordon |
+| 149 | Hardware | Power/Thermal | Fatal Link event (newer arch) | Cordon |
+
+---
+
+## Autonomous SRE Bot — Remediation Matrix
+
+| Trigger | Action | Reason |
+|:--------|:-------|:-------|
+| **XID 48 or 79** | Cordon + Taint `NoSchedule` + Terminate Pods | High risk of data corruption |
+| **HCA Fault** | Immediate cordon + taint | RDMA traffic blackholed |
+| **Link Flapping** | Annotate `NetworkDegraded` + Alert on-call | Perf impact only (don't crash job yet) |
+| **VF Stuck in INIT** | `systemctl restart openibd` → if fail → cordon | Try soft fix first |
+| **P0 Critical (any)** | Cordon after 120s grace period | Grace period allows re-check |
+| **All checks pass** | Auto-uncordon (if enabled; default: off) | Conservative: human must uncordon |
+
+---
+
+## Grafana "4K Sharp" Dashboard — 55 Panels
+
+Split into Day 0 and Day 1 panes matching the SentinAI architecture:
+
+| Section | Panels | What It Shows |
+|:--------|:-------|:-------------|
+| **Node Health Overview** | 12 | Health/Cordon stat, pass/warn/fail counts, per-component status |
+| **All Checks Table** | 1 | Every check with color-coded status, severity, component |
+| **Check Status Over Time** | 3 | Component health, failed counts, individual check lines |
+| **GPU Health** | 7 | DCGM: temp, ECC, power, NVLink, memory, check/cordon status |
+| **Day 0 — Provisioning** | 2 | SR-IOV, operators, BIOS, driver checks + cordon signals |
+| **Day 1 — Runtime** | 7 | Silent killers, hard failures, XID timeline, PCIe gen/width, SM clocks, violations |
+| **Fabric & IB** | 2 | Fabric cert checks, HCA traffic balance |
+| **CPU/Memory/Storage** | 2 | Non-GPU component checks |
+| **Severity Breakdown** | 5 | P0-P3 counts + failing-by-severity timeline |
+| **Cordon History** | 4 | Cordon signal, last check, freshness, health status |
+
+---
+
+## NPD (Node Problem Detector) Integration
+
+Custom log monitors and active check plugins deployed via ConfigMap:
+
+### Log Monitors
+| Monitor | Regex Pattern | NPD Condition |
+|:--------|:--------------|:-------------|
+| GPU XID 48 | `NVRM: Xid.*48` | `GPUHardwareFail` |
+| GPU XID 79 | `NVRM: Xid.*79` | `GPUHardwareFail` |
+| NVLink XID 74 | `NVRM: Xid.*74` | `GPUNVLinkFail` |
+| IB Link Down | `mlx5_core.*Link down` | `NetworkLinkFail` |
+| HCA Fault | `mlx5_core.*internal error` | `HCAFault` |
+| MCE | `mce:.*uncorrected` | `KernelHardwareFault` |
+| Soft Lockup | `BUG: soft lockup` | `KernelHardwareFault` |
+| OOM Kill | `Out of memory.*Kill` | (temporary event) |
+
+### Active Check Plugins
+| Plugin | Interval | What It Does |
+|:-------|:---------|:-------------|
+| `check_ib_bw.sh` | 600s | Verifies IB port is Active (400Gbps NDR) |
+| `check_gpu_clocks.sh` | 120s | SM clock vs max; >10% delta = throttle |
 
 ---
 
 ## Deployment
 
-### Prerequisites
-
-- Kubernetes cluster with kube-prometheus-stack (Prometheus + Grafana)
-- DCGM Exporter on GPU nodes (for live GPU metrics in dashboard)
-- Container image built and pushed to your registry
-
-### Build Image
+### Build & Push
 
 ```bash
 docker build -t ghcr.io/your-org/node-health-detector:1.0.0 .
@@ -135,12 +221,12 @@ docker push ghcr.io/your-org/node-health-detector:1.0.0
 ### Deploy via Helm
 
 ```bash
-# GPU nodes
+# GPU nodes (44 checks)
 helm install nhd-gpu charts/node-health-detector/ \
   -f charts/node-health-detector/values-gpu.yaml \
   -n monitoring --create-namespace
 
-# CPU nodes (separate release)
+# CPU nodes (14 checks)
 helm install nhd-cpu charts/node-health-detector/ \
   -f charts/node-health-detector/values-cpu.yaml \
   -n monitoring
@@ -152,7 +238,7 @@ helm install nhd-cpu charts/node-health-detector/ \
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: node-health-detector-gpu
+  name: sentinai-gpu
   namespace: argocd
 spec:
   project: default
@@ -175,46 +261,8 @@ spec:
 ### Import Grafana Dashboard
 
 ```bash
-# Generate the dashboard JSON
-cd dashboards && python3 generate_dashboard.py node-health-dashboard.json
-
-# Import via Grafana UI: Dashboards → Import → Upload JSON
-```
-
----
-
-## Configuration
-
-Configuration is loaded from `/etc/node-health-detector/config.yaml` (mounted from ConfigMap) or via environment variables:
-
-| Env Var | Default | Description |
-|:--------|:--------|:------------|
-| `NODE_TYPE` | `gpu` | `gpu` or `cpu` — determines which checks run |
-| `CHECK_INTERVAL` | `60` | Seconds between check cycles |
-| `METRICS_PORT` | `9101` | Prometheus metrics HTTP port |
-| `NODE_NAME` | hostname | Node name (set via Downward API in DaemonSet) |
-| `CONFIG_PATH` | `/etc/node-health-detector/config.yaml` | Config file path |
-
-### Config File Example
-
-```yaml
-node_type: gpu
-interval: 60
-auto_cordon: true
-auto_uncordon: false    # conservative: human must uncordon
-dry_run: false          # set to true for testing
-cordon_grace_period: 120
-
-checks:
-  gpu_temperature:
-    enabled: true
-    severity: 1
-    critical_temp: 90
-    warn_temp: 80
-  gpu_ecc_errors:
-    enabled: true
-    severity: 0
-    sbe_threshold: 100
+cd dashboards && python3 generate_dashboard.py
+# Import node-health-dashboard.json → Grafana → Dashboards → Import
 ```
 
 ---
@@ -228,23 +276,19 @@ All metrics use the `node_health_` prefix:
 | `node_health_node_healthy` | gauge | node | 1 = healthy, 0 = unhealthy |
 | `node_health_should_cordon` | gauge | node | 1 = cordon recommended |
 | `node_health_checks_run` | gauge | node | Total checks executed |
-| `node_health_passed` | gauge | node | Checks in pass state |
-| `node_health_failed` | gauge | node | Checks in fail state |
-| `node_health_warned` | gauge | node | Checks in warn state |
-| `node_health_check_status` | gauge | node, check, component, severity | Per-check: 0=pass, 1=warn, 2=fail, 3=unknown |
+| `node_health_passed` | gauge | node | Checks passing |
+| `node_health_failed` | gauge | node | Checks failing |
+| `node_health_warned` | gauge | node | Checks warning |
+| `node_health_check_status` | gauge | node, check, component, severity | Per-check: 0=pass, 1=warn, 2=fail |
 | `node_health_check_cordon` | gauge | node, check, component | Per-check: 1 if cordon requested |
 | `node_health_component_status` | gauge | node, component | Worst status per component |
-| `node_health_last_check_timestamp_seconds` | gauge | node | Unix timestamp of last check |
+| `node_health_last_check_timestamp_seconds` | gauge | node | Last check unix timestamp |
 
 ---
 
 ## Extension Guide — Adding New Checks
 
-This framework is designed for multiple teams to add their own checks.
-
-### Step 1: Create a Check File
-
-Create a new file under `src/checks/<your_category>/`:
+### Step 1: Create Check File
 
 ```python
 # src/checks/storage/nfs_health.py
@@ -252,120 +296,47 @@ from ..base import HealthCheck, Severity
 
 class NFSMountHealth(HealthCheck):
     name = "nfs_mount_health"
-    description = "Check NFS mount points are responsive"
-    component = "storage"            # Your team's component
+    description = "NFS mount point responsiveness"
+    component = "storage"
     default_severity = Severity.P1_HIGH
-    interval_seconds = 60
-    node_types = None                # None = all nodes, ["gpu"] = GPU only
+    node_types = None  # all nodes
 
     def run(self, node_info: dict):
-        # Your check logic here
-        import os
         nfs_mounts = self.config.get("nfs_mounts", ["/mnt/shared"])
         for mount in nfs_mounts:
             if not os.path.ismount(mount):
-                return self._fail(
-                    f"NFS mount {mount} is not mounted",
-                    severity=Severity.P1_HIGH, cordon=True,
-                    mount=mount)
-            try:
-                os.listdir(mount)
-            except OSError as e:
-                return self._fail(
-                    f"NFS mount {mount} is unresponsive: {e}",
-                    cordon=True, mount=mount)
+                return self._fail(f"NFS {mount} not mounted", cordon=True)
         return self._pass(f"All {len(nfs_mounts)} NFS mounts healthy")
 
 ALL_CHECKS = [NFSMountHealth]
 ```
 
-### Step 2: Register the Module
+### Step 2: Register in `check_runner.py`
 
-Add to `src/check_runner.py` in the `check_modules` dict:
+### Step 3: Configure in YAML
 
-```python
-check_modules = {
-    "gpu": [...],
-    "storage": [
-        ("checks.storage.disk_health", "ALL_CHECKS"),
-        ("checks.storage.nfs_health", "ALL_CHECKS"),   # YOUR NEW MODULE
-    ],
-    ...
-}
-```
-
-### Step 3: Configure
-
-Add to your config YAML:
-
-```yaml
-checks:
-  nfs_mount_health:
-    enabled: true
-    severity: 1
-    nfs_mounts: ["/mnt/shared", "/mnt/data"]
-```
-
-### Step 4: Create Your Team's Grafana Dashboard (optional)
-
-Other teams can create their own dashboards using the same `node_health_check_status` metrics:
-
-```promql
-# Your team's check status
-node_health_check_status{component="storage", check=~"nfs_.*"}
-```
+### Step 4: Build team-specific Grafana dashboard filtering `{component="storage"}`
 
 ---
 
 ## Team Responsibility Model
 
-| Team | Component | Checks They Own | Dashboard |
-|:-----|:----------|:----------------|:----------|
-| **Compute Platform** | gpu, cpu, memory | GPU DCGM, ECC, XID, NVLink, NCCL, topology, MCE, ECC | Node Health Detector (included) |
-| Storage | storage | Disk SMART, filesystem, NFS, Ceph | Team creates own dashboard |
-| Network | network | NIC, InfiniBand, BGP, DNS | Team creates own dashboard |
-| Platform/SRE | kubernetes | Kubelet, runtime, node conditions | Team creates own dashboard |
-
-The Compute Platform team's dashboard is the one generated by this project. Other teams follow the Extension Guide above to add their checks to the same agent, then build their own Grafana dashboards filtering by their `component` label.
+| Team | Component | Checks | Dashboard |
+|:-----|:----------|:-------|:----------|
+| **Compute Platform** | gpu, cpu, memory | DCGM, XID, NVLink, NCCL, Day 0/1, fabric | SentinAI (included) |
+| Storage | storage | SMART, filesystem, NFS, Ceph | Team builds own |
+| Network | network | NIC, IB, BGP, DNS | Team builds own |
+| Platform/SRE | kubernetes | Kubelet, runtime, conditions | Team builds own |
 
 ---
 
-## Cordon / Uncordon Behavior
+## Operational Runbook: "The NCCL Timeout"
 
-```
-Check Fails (should_cordon=True)
-         │
-         ▼
-   ┌─────────────┐
-   │ Grace Period │ (default: 120s)
-   │ Re-check     │ ← if check passes during grace period,
-   │ every cycle  │   cordon is cancelled
-   └──────┬──────┘
-          │ still failing after grace period
-          ▼
-   ┌─────────────┐
-   │ kubectl      │
-   │ cordon node  │
-   │              │
-   │ + annotate:  │
-   │ cordon-reason│
-   │ cordon-time  │
-   └──────┬──────┘
-          │
-          ▼
-   Node is Unschedulable
-   (existing pods keep running)
-          │
-          │ All checks pass again
-          ▼
-   ┌─────────────────┐
-   │ auto_uncordon:   │
-   │   true → uncordon│
-   │   false → manual │ (default)
-   └─────────────────┘
-```
-
-**auto_uncordon defaults to false** (conservative). A human operator must manually uncordon via `kubectl uncordon <node>` after investigating the root cause.
+1. **Check Grafana:** Is it fleet-wide or single-node?
+2. **If Single-Node:** Check NPD for XID 74 (NVLink) or IB Link Flapping
+3. **If Fleet-Wide:** Check Subnet Manager for routing convergence delays
+4. **Pinpoint:** Identify the "Rank 0" node that timed out first
+5. **Action:** Drain and isolate the culprit
 
 ---
 
@@ -373,62 +344,37 @@ Check Fails (should_cordon=True)
 
 ```
 k8s-node-health-detector/
-├── README.md                            # This file
+├── README.md
 ├── Dockerfile
 ├── config/
-│   ├── checks-gpu.yaml                  # GPU node check config
-│   └── checks-cpu.yaml                  # CPU node check config
+│   ├── checks-gpu.yaml                         # GPU config (44 checks)
+│   └── checks-cpu.yaml                         # CPU config (14 checks)
 ├── src/
-│   ├── agent.py                         # Main agent loop
-│   ├── check_runner.py                  # Check discovery & execution
-│   ├── prometheus_exporter.py           # Metrics HTTP server
-│   ├── node_controller.py              # Cordon/uncordon logic
+│   ├── agent.py                                # Main agent loop
+│   ├── check_runner.py                         # Discovery & execution
+│   ├── prometheus_exporter.py                  # Metrics HTTP :9101
+│   ├── node_controller.py                      # SRE Bot + cordon/uncordon
 │   └── checks/
-│       ├── base.py                      # Base check class (EXTEND THIS)
+│       ├── base.py                             # HealthCheck base class
 │       ├── gpu/
-│       │   ├── dcgm_health.py           # 10 GPU checks
-│       │   └── multi_node.py            # 6 multi-node checks
-│       ├── cpu/
-│       │   └── cpu_health.py            # 4 CPU checks
-│       ├── memory/
-│       │   └── mem_health.py            # 2 memory checks
-│       ├── storage/
-│       │   └── disk_health.py           # 3 storage checks
+│       │   ├── dcgm_health.py                  # 10 DCGM checks
+│       │   ├── multi_node.py                   # 6 multi-node checks
+│       │   ├── day0_provisioning.py            # 5 Day 0 checks
+│       │   └── day1_silent_killers.py          # 5 Day 1 checks
+│       ├── cpu/cpu_health.py                   # 4 CPU checks
+│       ├── memory/mem_health.py                # 2 memory checks
+│       ├── storage/disk_health.py              # 3 storage checks
 │       ├── network/
-│       │   └── nic_health.py            # 2 network checks
-│       └── kubernetes/
-│           └── k8s_health.py            # 3 kubernetes checks
-├── charts/
-│   └── node-health-detector/
-│       ├── Chart.yaml
-│       ├── values.yaml                  # Default values
-│       ├── values-gpu.yaml              # GPU node variant
-│       ├── values-cpu.yaml              # CPU node variant
-│       └── templates/
-│           ├── _helpers.tpl
-│           ├── daemonset.yaml
-│           ├── rbac.yaml
-│           ├── service.yaml             # + ServiceMonitor
-│           └── configmap.yaml
+│       │   ├── nic_health.py                   # 2 NIC checks
+│       │   └── fabric_health.py                # 4 fabric certification
+│       └── kubernetes/k8s_health.py            # 3 K8s checks
+├── charts/node-health-detector/
+│   ├── Chart.yaml
+│   ├── values.yaml / values-gpu.yaml / values-cpu.yaml
+│   └── templates/
+│       ├── daemonset.yaml, rbac.yaml, service.yaml, configmap.yaml
+│       └── npd-config.yaml                     # NPD log monitors + scripts
 └── dashboards/
-    ├── generate_dashboard.py            # Dashboard generator
-    └── node-health-dashboard.json       # Generated (41 panels)
+    ├── generate_dashboard.py
+    └── node-health-dashboard.json              # 55 panels
 ```
-
----
-
-## Related: Day Zero / Day Two SOP
-
-This project implements the automated Day Two monitoring defined in:
-
-**SOP: Certify Node is Healthy** (`docs/2026-02-12_SOP_Certify_Node_Healthy.md`)
-
-| SOP Section | Covered By |
-|:------------|:-----------|
-| §3.1 GPU Metrics (DCGM) | `gpu_dcgm_overall_health`, `gpu_ecc_errors`, `gpu_temperature`, `gpu_nvlink_health`, `gpu_pcie_health`, `gpu_power_violation`, `gpu_row_remapping` |
-| §3.2 System Metrics | `cpu_mce_errors`, `disk_smart_health`, `infiniband_error_counters` |
-| §3.2 Severity P1/P2/P3 | Severity classification in check configs |
-| §2.4 NCCL Performance | `multi_node_nccl_allreduce` |
-| §2.6 NVLink/NVSwitch | `gpu_topology_check`, `nvswitch_health`, `multi_node_nvbandwidth` |
-| §2.6 InfiniBand | `infiniband_multi_port`, `infiniband_error_counters` |
-| §2.1 XID Errors | `gpu_xid_errors` (critical XID list from SOP) |

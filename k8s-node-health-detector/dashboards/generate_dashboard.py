@@ -363,6 +363,142 @@ def build():
     y += 8
 
     # ================================================================
+    # ROW: DAY 0 — PROVISIONING HEALTH (SentinAI Page 8)
+    # ================================================================
+    panels.append(row("Day 0 — Provisioning Health", y)); y += 1
+
+    # Day 0 check status
+    panels.append(ts(
+        "Day 0 Provisioning Check Status",
+        "SR-IOV VF status, GPU Operator, Network Operator, BIOS audit, driver versions. "
+        "Failures here are Job Blockers — pods stay Pending.",
+        {"h": 8, "w": 12, "x": 0, "y": y},
+        [tgt(f'node_health_check_status{{{N}, check=~"day0_.*"}}', "{{check}}")],
+        axis="Status (0=pass, 2=fail)"
+    ))
+
+    # Day 0 cordon signals
+    panels.append(ts(
+        "Day 0 Cordon Signals",
+        "Day 0 checks requesting cordon: SR-IOV VF stuck, GPU driver failure.",
+        {"h": 8, "w": 12, "x": 12, "y": y},
+        [tgt(f'node_health_check_cordon{{{N}, check=~"day0_.*"}}', "{{check}}")],
+        axis="Cordon (1=yes)"
+    ))
+    y += 8
+
+    # ================================================================
+    # ROW: DAY 1 — RUNTIME & PERFORMANCE (SentinAI Page 8)
+    # ================================================================
+    panels.append(row("Day 1 — Runtime & Performance", y)); y += 1
+
+    # Day 1 silent killers (Orange X)
+    panels.append(ts(
+        "Day 1 Silent Killers (Orange X)",
+        "Performance degradation checks: PCIe gen/width, GPU clock throttle, "
+        "IB link flapping. Don't crash jobs but cause 30-90% perf loss.",
+        {"h": 8, "w": 12, "x": 0, "y": y},
+        [tgt(f'node_health_check_status{{{N}, check=~"day1_.*"}}', "{{check}}")],
+        axis="Status (0=pass, 2=fail)"
+    ))
+
+    # Day 1 hard failures (Red X)
+    panels.append(ts(
+        "Day 1 Hard Failures (Red X)",
+        "Job killers: HCA fault, Subnet Manager down, XID 48/79. "
+        "These crash or hang multi-day training runs.",
+        {"h": 8, "w": 12, "x": 12, "y": y},
+        [tgt(f'node_health_check_cordon{{{N}, check=~"day1_.*"}}', "{{check}}")],
+        axis="Cordon (1=yes)"
+    ))
+    y += 8
+
+    # XID Timeline — every GPU error on a single time axis
+    panels.append(ts(
+        "XID Error Timeline (from DCGM Exporter)",
+        "XID errors across all GPUs on this node. "
+        "Critical XIDs: 48, 79, 74, 61-64, 94-95. Any spike = investigate.",
+        {"h": 8, "w": 24, "x": 0, "y": y},
+        [tgt('DCGM_FI_DEV_XID_ERRORS', "GPU {{gpu}} XID")],
+        axis="XID Error Count"
+    ))
+    y += 8
+
+    # PCIe generation and width (from DCGM)
+    panels.append(ts(
+        "PCIe Generation per GPU (from DCGM Exporter)",
+        "Current PCIe generation. Expected: Gen5 (5). "
+        "Gen4 = 50% bandwidth loss. Gen3 = 75% loss.",
+        {"h": 8, "w": 12, "x": 0, "y": y},
+        [tgt('DCGM_FI_DEV_PCIE_LINK_GEN', "GPU {{gpu}} Gen")],
+        axis="PCIe Generation"
+    ))
+
+    panels.append(ts(
+        "PCIe Link Width per GPU (from DCGM Exporter)",
+        "Current PCIe width. Expected: x16. "
+        "x8 = 50% bandwidth loss.",
+        {"h": 8, "w": 12, "x": 12, "y": y},
+        [tgt('DCGM_FI_DEV_PCIE_LINK_WIDTH', "GPU {{gpu}} Width")],
+        axis="PCIe Width"
+    ))
+    y += 8
+
+    # GPU SM Clock vs Max Clock — throttle detection
+    panels.append(ts(
+        "GPU SM Clock — Current vs Max (from DCGM Exporter)",
+        "Clock delta > 10% = throttling (Silent Killer). "
+        "Causes 30-90% perf degradation without crashing.",
+        {"h": 8, "w": 12, "x": 0, "y": y},
+        [tgt('DCGM_FI_DEV_SM_CLOCK', "GPU {{gpu}} Current SM"),
+         tgt('DCGM_FI_DEV_MAX_SM_CLOCK', "GPU {{gpu}} Max SM")],
+        axis="MHz"
+    ))
+
+    # Thermal and Power Violations
+    panels.append(ts(
+        "Thermal & Power Violations (from DCGM Exporter)",
+        "Thermal violation (clock throttle) and power violation (power cap). "
+        "Values in microseconds of throttle time.",
+        {"h": 8, "w": 12, "x": 12, "y": y},
+        [tgt('DCGM_FI_DEV_THERMAL_VIOLATION', "GPU {{gpu}} Thermal"),
+         tgt('DCGM_FI_DEV_POWER_VIOLATION', "GPU {{gpu}} Power")],
+        axis="Violation (us)",
+        overrides=[
+            {"matcher": {"id": "byRegexp", "options": ".*Thermal.*"}, "properties": [{"id": "color", "value": {"fixedColor": C_P1, "mode": "fixed"}}]},
+            {"matcher": {"id": "byRegexp", "options": ".*Power.*"}, "properties": [{"id": "color", "value": {"fixedColor": C_P2, "mode": "fixed"}}]},
+        ]
+    ))
+    y += 8
+
+    # ================================================================
+    # ROW: FABRIC & IB HEALTH (SentinAI Page 5)
+    # ================================================================
+    panels.append(row("Fabric & InfiniBand Health", y)); y += 1
+
+    # Fabric checks
+    panels.append(ts(
+        "Fabric Certification Check Status",
+        "LID assignment, MTU parity, HCA traffic balance, IB bandwidth. "
+        "All must PASS for node to be AI Ready.",
+        {"h": 8, "w": 12, "x": 0, "y": y},
+        [tgt(f'node_health_check_status{{{N}, check=~"fabric_.*"}}', "{{check}}")],
+        axis="Status (0=pass, 2=fail)"
+    ))
+
+    # IB throughput per HCA (identifies straggler nodes)
+    panels.append(ts(
+        "Throughput per HCA Port",
+        "Identifies straggler nodes that slow down collectives. "
+        "All 8 HCAs should show roughly equal traffic. Silent HCA = Red X.",
+        {"h": 8, "w": 12, "x": 12, "y": y},
+        [tgt(f'node_health_check_status{{{N}, check="fabric_hca_traffic_balance"}}',
+             "HCA Balance Check")],
+        axis="Status"
+    ))
+    y += 8
+
+    # ================================================================
     # ROW 4: CPU & SYSTEM HEALTH
     # ================================================================
     panels.append(row("CPU, Memory, Storage Health", y)); y += 1

@@ -32,11 +32,14 @@ class CheckRunner:
         """Auto-discover all health checks from the checks package."""
         check_modules = {
             "gpu": [("checks.gpu.dcgm_health", "ALL_CHECKS"),
-                    ("checks.gpu.multi_node", "ALL_CHECKS")],
+                    ("checks.gpu.multi_node", "ALL_CHECKS"),
+                    ("checks.gpu.day0_provisioning", "ALL_CHECKS"),
+                    ("checks.gpu.day1_silent_killers", "ALL_CHECKS")],
             "cpu": [("checks.cpu.cpu_health", "ALL_CHECKS")],
             "memory": [("checks.memory.mem_health", "ALL_CHECKS")],
             "storage": [("checks.storage.disk_health", "ALL_CHECKS")],
-            "network": [("checks.network.nic_health", "ALL_CHECKS")],
+            "network": [("checks.network.nic_health", "ALL_CHECKS"),
+                        ("checks.network.fabric_health", "ALL_CHECKS")],
             "kubernetes": [("checks.kubernetes.k8s_health", "ALL_CHECKS")],
         }
 
