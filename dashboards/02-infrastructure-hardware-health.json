@@ -1,0 +1,2057 @@
+{
+    "__inputs": [],
+    "__requires": [
+        {
+            "type": "grafana",
+            "id": "grafana",
+            "name": "Grafana",
+            "version": "9.0.0"
+        },
+        {
+            "type": "datasource",
+            "id": "prometheus",
+            "name": "Prometheus",
+            "version": "1.0.0"
+        }
+    ],
+    "id": null,
+    "uid": "bmaas-02-infra-health",
+    "title": "BMaaS \u2014 02 Infrastructure & Hardware Health",
+    "description": "Physical infrastructure monitoring: PSU health, power consumption, CDU cooling, leak detection, CPU thermal, SMART disk health, DPU/NIC, voltage rails, BMC status.",
+    "tags": [
+        "bmaas",
+        "infrastructure",
+        "hardware",
+        "psu",
+        "cdu",
+        "cooling",
+        "leak",
+        "smart",
+        "bcm11"
+    ],
+    "style": "dark",
+    "timezone": "browser",
+    "editable": true,
+    "graphTooltip": 1,
+    "fiscalYearStartMonth": 0,
+    "liveNow": false,
+    "refresh": "30s",
+    "schemaVersion": 38,
+    "version": 1,
+    "time": {
+        "from": "now-6h",
+        "to": "now"
+    },
+    "timepicker": {},
+    "annotations": {
+        "list": [
+            {
+                "builtIn": 1,
+                "datasource": {
+                    "type": "grafana",
+                    "uid": "-- Grafana --"
+                },
+                "enable": true,
+                "hide": true,
+                "iconColor": "rgba(0, 211, 255, 1)",
+                "name": "Annotations & Alerts",
+                "type": "dashboard"
+            }
+        ]
+    },
+    "templating": {
+        "list": [
+            {
+                "name": "datasource",
+                "type": "datasource",
+                "label": "Prometheus Data Source",
+                "query": "prometheus",
+                "current": {},
+                "hide": 0,
+                "includeAll": false,
+                "multi": false,
+                "options": [],
+                "refresh": 1,
+                "regex": "",
+                "skipUrlSync": false
+            },
+            {
+                "name": "cluster",
+                "type": "query",
+                "label": "Cluster",
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "${datasource}"
+                },
+                "definition": "label_values(up, cluster)",
+                "query": {
+                    "query": "label_values(up, cluster)",
+                    "refId": "cl"
+                },
+                "current": {},
+                "hide": 0,
+                "includeAll": true,
+                "multi": false,
+                "options": [],
+                "refresh": 2,
+                "regex": "",
+                "sort": 1,
+                "skipUrlSync": false
+            },
+            {
+                "name": "node",
+                "type": "query",
+                "label": "Node",
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "${datasource}"
+                },
+                "definition": "label_values(up{cluster=~\"$cluster\"}, instance)",
+                "query": {
+                    "query": "label_values(up{cluster=~\"$cluster\"}, instance)",
+                    "refId": "nd"
+                },
+                "current": {},
+                "hide": 0,
+                "includeAll": true,
+                "multi": true,
+                "options": [],
+                "refresh": 2,
+                "regex": "",
+                "sort": 1,
+                "skipUrlSync": false
+            }
+        ]
+    },
+    "panels": [
+        {
+            "type": "row",
+            "title": "Power Supply Unit Health",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 0
+            },
+            "id": 1,
+            "panels": []
+        },
+        {
+            "id": 2,
+            "title": "Total PSUs Active",
+            "description": "RF_Active_PSU count across nodes.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 5,
+                "w": 4,
+                "x": 0,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#3274D9",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(RF_Active_PSU{node=~\"$node\"}) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 3,
+            "title": "Healthy PSU Ratio",
+            "description": "TotalPowerShelfHealthyPSU \u2014 1.0 = all healthy.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 5,
+                "w": 4,
+                "x": 4,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percentunit",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#C04040",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 0.8
+                            },
+                            {
+                                "color": "#56A64B",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "avg(TotalPowerShelfHealthyPSU{node=~\"$node\"})",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 4,
+            "title": "Degraded PSUs",
+            "description": "TotalPowerShelfDegradedPSU \u2014 any > 0 = investigate.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 5,
+                "w": 4,
+                "x": 8,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(TotalPowerShelfDegradedPSU{node=~\"$node\"} == 1) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 5,
+            "title": "Critical PSUs",
+            "description": "TotalPowerShelfCriticalPSU \u2014 any > 0 = URGENT.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 5,
+                "w": 4,
+                "x": 12,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(TotalPowerShelfCriticalPSU{node=~\"$node\"} == 1) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 6,
+            "title": "PSU Input Voltage",
+            "description": "RF_Power_Supply_InputVoltage per PSU. Out of range = utility issue.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 5,
+                "w": 8,
+                "x": 16,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "volt",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Voltage",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_Power_Supply_InputVoltage{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} PSU{{psu_id}}"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "Power Consumption",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 6
+            },
+            "id": 7,
+            "panels": []
+        },
+        {
+            "id": 8,
+            "title": "PSU Input Power",
+            "description": "RF_Power_Supply_InputPower per node.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 0,
+                "y": 7
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "watt",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Power",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_Power_Supply_InputPower{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} PSU{{psu_id}}"
+                }
+            ]
+        },
+        {
+            "id": 9,
+            "title": "PSU Output Power",
+            "description": "RF_Power_Supply_OutputPower per node.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 8,
+                "y": 7
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "watt",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Power",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_Power_Supply_OutputPower{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} PSU{{psu_id}}"
+                }
+            ]
+        },
+        {
+            "id": 10,
+            "title": "Circuit Power (Total)",
+            "description": "CircuitPower / TotalCircuitPower across racks.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 16,
+                "y": 7
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "watt",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Power",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "CircuitPower{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} Circuit"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "TotalCircuitPower",
+                    "legendFormat": "Total"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "CDU Cooling Health",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 13
+            },
+            "id": 11,
+            "panels": []
+        },
+        {
+            "id": 12,
+            "title": "CDU Liquid Flow Rate",
+            "description": "CDULiquidFlow \u2014 below minimum = reduced cooling capacity.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 0,
+                "y": 14
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Flow Rate",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "CDULiquidFlow{node=~\"$node\"}",
+                    "legendFormat": "{{instance}}"
+                }
+            ]
+        },
+        {
+            "id": 13,
+            "title": "CDU Supply Temperature",
+            "description": "CDULiquidSupplyTemperature \u2014 cold side entering the rack.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 6,
+                "y": 14
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "celsius",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Temperature",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "CDULiquidSupplyTemperature{node=~\"$node\"}",
+                    "legendFormat": "{{instance}}"
+                }
+            ]
+        },
+        {
+            "id": 14,
+            "title": "CDU Return Temperature",
+            "description": "CDULiquidReturnTemperature \u2014 hot side leaving the rack. Rising = cooling deficit.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 12,
+                "y": 14
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "celsius",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Temperature",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "CDULiquidReturnTemperature{node=~\"$node\"}",
+                    "legendFormat": "{{instance}}"
+                }
+            ]
+        },
+        {
+            "id": 15,
+            "title": "CDU Differential Pressure",
+            "description": "CDULiquidDifferentialPressure \u2014 anomalies indicate blockage or pump failure.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 18,
+                "y": 14
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Pressure",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "CDULiquidDifferentialPressure{node=~\"$node\"}",
+                    "legendFormat": "{{instance}}"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "\u26a0\ufe0f Leak Detection",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 20
+            },
+            "id": 16,
+            "panels": []
+        },
+        {
+            "id": 17,
+            "title": "\ud83d\udea8 Devices With Leaks",
+            "description": "DevicesWithLeaks \u2014 ANY > 0 = EMERGENCY. Follow facility leak procedures.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 5,
+                "w": 6,
+                "x": 0,
+                "y": 21
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(DevicesWithLeaks{node=~\"$node\"}) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 18,
+            "title": "Leak Sensor Faults",
+            "description": "LeakSensorFaultRack \u2014 sensor fault may MASK an actual leak.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 5,
+                "w": 6,
+                "x": 6,
+                "y": 21
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(LeakSensorFaultRack{node=~\"$node\"}) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 19,
+            "title": "Electrical Isolation",
+            "description": "LeakResponseRackElectricalIsolationStatus \u2014 isolation triggered by leak.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 5,
+                "w": 6,
+                "x": 12,
+                "y": 21
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(LeakResponseRackElectricalIsolationStatus{node=~\"$node\"}) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 20,
+            "title": "Liquid Isolation",
+            "description": "LeakResponseRackLiquidIsolationStatus \u2014 liquid isolation triggered.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 5,
+                "w": 6,
+                "x": 18,
+                "y": 21
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(LeakResponseRackLiquidIsolationStatus{node=~\"$node\"}) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "CPU & System Thermal",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 26
+            },
+            "id": 21,
+            "panels": []
+        },
+        {
+            "id": 22,
+            "title": "CPU1 Temperature",
+            "description": "RF_CPU1Temp \u2014 CPU1 junction temperature.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 0,
+                "y": 27
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "celsius",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Temperature",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_CPU1Temp{node=~\"$node\"}",
+                    "legendFormat": "{{instance}}"
+                }
+            ]
+        },
+        {
+            "id": 23,
+            "title": "CPU2 Temperature",
+            "description": "RF_CPU2Temp \u2014 CPU2 junction temperature.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 6,
+                "y": 27
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "celsius",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Temperature",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_CPU2Temp{node=~\"$node\"}",
+                    "legendFormat": "{{instance}}"
+                }
+            ]
+        },
+        {
+            "id": 24,
+            "title": "CPU VRM Temperature",
+            "description": "RF_CPU1RearTemp / RF_CPU2RearTemp \u2014 VRM thermal.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 12,
+                "y": 27
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "celsius",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Temperature",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_CPU1RearTemp{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} CPU1 VRM"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_CPU2RearTemp{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} CPU2 VRM"
+                }
+            ]
+        },
+        {
+            "id": 25,
+            "title": "Fan Speed",
+            "description": "RF_Power_Supply_FanSpeed / gpu_fan_speed \u2014 cooling fan status.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 18,
+                "y": 27
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "RPM",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_Power_Supply_FanSpeed{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} PSU Fan"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu_fan_speed{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} GPU Fan"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "Disk Health (SMART) & DPU/NIC",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 33
+            },
+            "id": 26,
+            "panels": []
+        },
+        {
+            "id": 27,
+            "title": "SMART Reallocated Sectors",
+            "description": "smart_reallocated_sector_ct \u2014 rising = disk degradation.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 0,
+                "y": 34
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Sectors",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "smart_reallocated_sector_ct{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} {{disk}}"
+                }
+            ]
+        },
+        {
+            "id": 28,
+            "title": "SMART Pending Sectors",
+            "description": "smart_current_pending_sector \u2014 > 0 = pre-fail indicator.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 6,
+                "y": 34
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Pending Sectors",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "smart_current_pending_sector{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} {{disk}}"
+                }
+            ]
+        },
+        {
+            "id": 29,
+            "title": "Disk Temperature",
+            "description": "smart_temperature \u2014 elevated temp = cooling or workload issue.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 12,
+                "y": 34
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "celsius",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Temperature",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "smart_temperature{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} {{disk}}"
+                }
+            ]
+        },
+        {
+            "id": 30,
+            "title": "BlueField DPU Temperature",
+            "description": "RF_BF3_Slot_1_NIC_Temp_0 / Slot_2 \u2014 DPU thermal monitoring.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 18,
+                "y": 34
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "celsius",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Temperature",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_BF3_Slot_1_NIC_Temp_0{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} DPU Slot1"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_BF3_Slot_2_NIC_Temp_0{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} DPU Slot2"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "Voltage Monitoring & Hardware Profile",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 40
+            },
+            "id": 31,
+            "panels": []
+        },
+        {
+            "id": 32,
+            "title": "CPU VCCIN Voltage",
+            "description": "RF_CPU1_VCCIN \u2014 CPU input voltage rail. Out of spec = power delivery issue.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 0,
+                "y": 41
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "volt",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Voltage",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_CPU1_VCCIN{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} CPU1"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_CPU1_VCCHV{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} CPU1 HV"
+                }
+            ]
+        },
+        {
+            "id": 33,
+            "title": "PSU Rail Voltage",
+            "description": "RF_Power_Supply_RailVoltage \u2014 per-PSU rail output.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 6,
+                "y": 41
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "volt",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Voltage",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_Power_Supply_RailVoltage{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} PSU{{psu_id}}"
+                }
+            ]
+        },
+        {
+            "id": 34,
+            "title": "BMC Status",
+            "description": "nvsm_pci_health \u2014 0 = OK, non-zero = investigate.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 12,
+                "y": 41
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "0": {
+                                    "text": "HEALTHY",
+                                    "color": "#56A64B"
+                                }
+                            }
+                        },
+                        {
+                            "type": "range",
+                            "options": {
+                                "from": 1,
+                                "to": 999,
+                                "result": {
+                                    "text": "DEGRADED",
+                                    "color": "#C04040"
+                                }
+                            }
+                        }
+                    ],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "nvsm_pci_health{node=~\"$node\"}",
+                    "legendFormat": "{{instance}}",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 35,
+            "title": "Hardware Profile Match",
+            "description": "hardware-profile data producer health check. FAIL = hardware configuration drift.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 18,
+                "y": 41
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "0": {
+                                    "text": "MATCH",
+                                    "color": "#56A64B"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "1": {
+                                    "text": "DRIFT",
+                                    "color": "#C04040"
+                                }
+                            }
+                        }
+                    ],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "bcm_health_check_status{node=~\"$node\", check=\"hardware-profile\"}",
+                    "legendFormat": "{{instance}}",
+                    "instant": true
+                }
+            ]
+        }
+    ],
+    "links": [
+        {
+            "title": "00 Executive Fleet Overview",
+            "type": "link",
+            "icon": "dashboard",
+            "url": "/d/bmaas-00-fleet-overview?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "targetBlank": false
+        },
+        {
+            "title": "01 GPU Health & Diagnostics",
+            "type": "link",
+            "icon": "dashboard",
+            "url": "/d/bmaas-01-gpu-health?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "targetBlank": false
+        },
+        {
+            "title": "02 Infrastructure & Hardware",
+            "type": "link",
+            "icon": "dashboard",
+            "url": "/d/bmaas-02-infra-health?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "targetBlank": false
+        },
+        {
+            "title": "03 Network Fabric",
+            "type": "link",
+            "icon": "dashboard",
+            "url": "/d/bmaas-03-network-fabric?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "targetBlank": false
+        },
+        {
+            "title": "04 Workload & Jobs",
+            "type": "link",
+            "icon": "dashboard",
+            "url": "/d/bmaas-04-workload-perf?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "targetBlank": false
+        },
+        {
+            "title": "05 Burn-in & Certification",
+            "type": "link",
+            "icon": "dashboard",
+            "url": "/d/bmaas-05-burnin-cert?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "targetBlank": false
+        },
+        {
+            "title": "06 SLA Compliance",
+            "type": "link",
+            "icon": "dashboard",
+            "url": "/d/bmaas-06-sla-compliance?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "targetBlank": false
+        }
+    ]
+}

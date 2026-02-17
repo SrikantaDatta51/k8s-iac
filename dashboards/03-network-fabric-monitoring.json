@@ -1,0 +1,1793 @@
+{
+    "__inputs": [],
+    "__requires": [
+        {
+            "type": "grafana",
+            "id": "grafana",
+            "name": "Grafana",
+            "version": "9.0.0"
+        },
+        {
+            "type": "datasource",
+            "id": "prometheus",
+            "name": "Prometheus",
+            "version": "1.0.0"
+        }
+    ],
+    "id": null,
+    "uid": "bmaas-03-network-fabric",
+    "title": "BMaaS \u2014 03 Network Fabric Monitoring",
+    "description": "NVLink switches, port health, bandwidth, NMX compute/GPU/switch/domain health, InfiniBand throughput and errors, GPU fabric status.",
+    "tags": [
+        "bmaas",
+        "network",
+        "nvlink",
+        "infiniband",
+        "nmx",
+        "fabric",
+        "bcm11"
+    ],
+    "style": "dark",
+    "timezone": "browser",
+    "editable": true,
+    "graphTooltip": 1,
+    "fiscalYearStartMonth": 0,
+    "liveNow": false,
+    "refresh": "30s",
+    "schemaVersion": 38,
+    "version": 1,
+    "time": {
+        "from": "now-6h",
+        "to": "now"
+    },
+    "timepicker": {},
+    "annotations": {
+        "list": [
+            {
+                "builtIn": 1,
+                "datasource": {
+                    "type": "grafana",
+                    "uid": "-- Grafana --"
+                },
+                "enable": true,
+                "hide": true,
+                "iconColor": "rgba(0, 211, 255, 1)",
+                "name": "Annotations & Alerts",
+                "type": "dashboard"
+            }
+        ]
+    },
+    "templating": {
+        "list": [
+            {
+                "name": "datasource",
+                "type": "datasource",
+                "label": "Prometheus Data Source",
+                "query": "prometheus",
+                "current": {},
+                "hide": 0,
+                "includeAll": false,
+                "multi": false,
+                "options": [],
+                "refresh": 1,
+                "regex": "",
+                "skipUrlSync": false
+            },
+            {
+                "name": "cluster",
+                "type": "query",
+                "label": "Cluster",
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "${datasource}"
+                },
+                "definition": "label_values(up, cluster)",
+                "query": {
+                    "query": "label_values(up, cluster)",
+                    "refId": "cl"
+                },
+                "current": {},
+                "hide": 0,
+                "includeAll": true,
+                "multi": false,
+                "options": [],
+                "refresh": 2,
+                "regex": "",
+                "sort": 1,
+                "skipUrlSync": false
+            },
+            {
+                "name": "node",
+                "type": "query",
+                "label": "Node",
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "${datasource}"
+                },
+                "definition": "label_values(up{cluster=~\"$cluster\"}, instance)",
+                "query": {
+                    "query": "label_values(up{cluster=~\"$cluster\"}, instance)",
+                    "refId": "nd"
+                },
+                "current": {},
+                "hide": 0,
+                "includeAll": true,
+                "multi": true,
+                "options": [],
+                "refresh": 2,
+                "regex": "",
+                "sort": 1,
+                "skipUrlSync": false
+            },
+            {
+                "name": "gpu_id",
+                "type": "query",
+                "label": "GPU ID",
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "${datasource}"
+                },
+                "definition": "label_values(gpu_utilization{node=~\"$node\"}, gpu)",
+                "query": {
+                    "query": "label_values(gpu_utilization{node=~\"$node\"}, gpu)",
+                    "refId": "gp"
+                },
+                "current": {},
+                "hide": 0,
+                "includeAll": true,
+                "multi": true,
+                "options": [],
+                "refresh": 2,
+                "regex": "",
+                "sort": 3,
+                "skipUrlSync": false
+            }
+        ]
+    },
+    "panels": [
+        {
+            "type": "row",
+            "title": "NVLink Fabric Overview",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 0
+            },
+            "id": 1,
+            "panels": []
+        },
+        {
+            "id": 2,
+            "title": "NVLink Switches UP",
+            "description": "NVLinkSwitchesUp from ClusterTotal data producer.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 5,
+                "w": 6,
+                "x": 0,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(NVLinkSwitchesUp{cluster=~\"$cluster\"}}) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 3,
+            "title": "NVLink Switches DOWN",
+            "description": "NVLinkSwitchesDown from ClusterTotal data producer.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 5,
+                "w": 6,
+                "x": 6,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(NVLinkSwitchesDown{cluster=~\"$cluster\"}}) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 4,
+            "title": "NVLink Switches CLOSED",
+            "description": "NVLinkSwitchesClosed from ClusterTotal data producer.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 5,
+                "w": 6,
+                "x": 12,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#E0A939",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(NVLinkSwitchesClosed{cluster=~\"$cluster\"}}) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 5,
+            "title": "NVLink Switches Total",
+            "description": "NVLinkSwitchesTotal from ClusterTotal data producer.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 5,
+                "w": 6,
+                "x": 18,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#3274D9",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(NVLinkSwitchesTotal{cluster=~\"$cluster\"}}) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "NVLink Port Health",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 6
+            },
+            "id": 6,
+            "panels": []
+        },
+        {
+            "id": 7,
+            "title": "NVLink Port Link State",
+            "description": "RF_NVLink_Resource_LinkState \u2014 per-port link status. Active = healthy.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 0,
+                "y": 7
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Link State",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_NVLink_Resource_LinkState{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} Port{{port}}"
+                }
+            ]
+        },
+        {
+            "id": 8,
+            "title": "NVLink Port Bit Error Rate",
+            "description": "RF_NVLink_Port_Nvidia_BitErrorRate \u2014 rising = NVLink degradation.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 8,
+                "y": 7
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "BER",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byFrameRefID",
+                            "options": "A"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "#C04040",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_NVLink_Port_Nvidia_BitErrorRate{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} Port{{port}}"
+                }
+            ]
+        },
+        {
+            "id": 9,
+            "title": "NVLink Port Link Downed",
+            "description": "RF_NVLink_Port_Nvidia_LinkDowned \u2014 > 0 = link failures occurred.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 16,
+                "y": 7
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Link Downed",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_NVLink_Port_Nvidia_LinkDowned{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} Port{{port}}"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "NVLink Bandwidth",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 13
+            },
+            "id": 10,
+            "panels": []
+        },
+        {
+            "id": 11,
+            "title": "NVLink Port RX Bandwidth",
+            "description": "RF_NVLink_Port_RX \u2014 receive throughput per NVLink port.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 0,
+                "y": 14
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "Bps",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "RX Bandwidth",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_NVLink_Port_RX{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} Port{{port}}"
+                }
+            ]
+        },
+        {
+            "id": 12,
+            "title": "NVLink Port TX Bandwidth",
+            "description": "RF_NVLink_Port_TX \u2014 transmit throughput per NVLink port.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 8,
+                "y": 14
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "Bps",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "TX Bandwidth",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_NVLink_Port_TX{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} Port{{port}}"
+                }
+            ]
+        },
+        {
+            "id": 13,
+            "title": "NVLink Speed: Current vs Max",
+            "description": "RF_NVLink_Resource_CurrentSpeed vs RF_NVLink_Resource_MaxSpeed.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 16,
+                "y": 14
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Speed",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_NVLink_Resource_CurrentSpeed{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} Current"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "RF_NVLink_Resource_MaxSpeed{node=~\"$node\"}",
+                    "legendFormat": "{{instance}} Max"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "NMX Telemetry (NVLink Monitoring)",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 20
+            },
+            "id": 14,
+            "panels": []
+        },
+        {
+            "id": 15,
+            "title": "NMX Compute Healthy",
+            "description": "nmxm_compute_health_count \u2014 nodes in healthy state.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 0,
+                "y": 21
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(nmxm_compute_health_count{cluster=~\"$cluster\", state=\"healthy\"}) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 16,
+            "title": "NMX Compute Degraded",
+            "description": "nmxm_compute_health_count \u2014 nodes in degraded state.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 6,
+                "y": 21
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#E0A939",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(nmxm_compute_health_count{cluster=~\"$cluster\", state=\"degraded\"}) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 17,
+            "title": "NMX Compute Unhealthy",
+            "description": "nmxm_compute_health_count \u2014 nodes in unhealthy state.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 12,
+                "y": 21
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#C04040",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(nmxm_compute_health_count{cluster=~\"$cluster\", state=\"unhealthy\"}) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 18,
+            "title": "NMX Compute Unknown",
+            "description": "nmxm_compute_health_count \u2014 nodes in unknown state.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 18,
+                "y": 21
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#8F8F8F",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(nmxm_compute_health_count{cluster=~\"$cluster\", state=\"unknown\"}) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 19,
+            "title": "NMX GPU Healthy",
+            "description": "nmxm_gpu_health_count \u2014 GPUs in healthy state.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 0,
+                "y": 25
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(nmxm_gpu_health_count{cluster=~\"$cluster\", state=\"healthy\"}) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 20,
+            "title": "NMX GPU Degraded",
+            "description": "nmxm_gpu_health_count \u2014 GPUs in degraded state.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 6,
+                "y": 25
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#E0A939",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(nmxm_gpu_health_count{cluster=~\"$cluster\", state=\"degraded\"}) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 21,
+            "title": "NMX GPU Degraded BW",
+            "description": "nmxm_gpu_health_count \u2014 GPUs in degraded_bw state.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 12,
+                "y": 25
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#EF843C",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(nmxm_gpu_health_count{cluster=~\"$cluster\", state=\"degraded_bw\"}) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 22,
+            "title": "NMX Non-NVLink GPUs",
+            "description": "nmxm_gpu_health_count \u2014 GPUs in nonvlink state.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 18,
+                "y": 25
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#8F8F8F",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "auto",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(nmxm_gpu_health_count{cluster=~\"$cluster\", state=\"nonvlink\"}) or vector(0)",
+                    "legendFormat": "",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 23,
+            "title": "NMX Switch Health",
+            "description": "nmxm_switch_health_count \u2014 healthy / missing_nvlink / unhealthy / unknown.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 0,
+                "y": 29
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Count",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "nmxm_switch_health_count{cluster=~\"$cluster\"}}",
+                    "legendFormat": "{{state}}"
+                }
+            ]
+        },
+        {
+            "id": 24,
+            "title": "NMX Domain Health",
+            "description": "nmxm_domain_health_count \u2014 domain health aggregation. Unhealthy = multi-node at risk.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 12,
+                "y": 29
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Count",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "nmxm_domain_health_count{cluster=~\"$cluster\"}}",
+                    "legendFormat": "{{state}}"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "InfiniBand Fabric",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 35
+            },
+            "id": 25,
+            "panels": []
+        },
+        {
+            "id": 26,
+            "title": "IB Data Received",
+            "description": "ib_rcv_data \u2014 InfiniBand receive throughput per port.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 0,
+                "y": 36
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "Bps",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "RX Rate",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "rate(ib_rcv_data{node=~\"$node\"}[5m])",
+                    "legendFormat": "{{instance}} {{port}}"
+                }
+            ]
+        },
+        {
+            "id": 27,
+            "title": "IB Data Transmitted",
+            "description": "ib_xmit_data \u2014 InfiniBand transmit throughput per port.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 8,
+                "y": 36
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "Bps",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "TX Rate",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "rate(ib_xmit_data{node=~\"$node\"}[5m])",
+                    "legendFormat": "{{instance}} {{port}}"
+                }
+            ]
+        },
+        {
+            "id": 28,
+            "title": "IB Errors",
+            "description": "ib_rcv_err / ib_xmit_err \u2014 InfiniBand error counters.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 16,
+                "y": 36
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Errors/s",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "rate(ib_rcv_err{node=~\"$node\"}[5m])",
+                    "legendFormat": "{{instance}} RcvErr"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "rate(ib_xmit_err{node=~\"$node\"}[5m])",
+                    "legendFormat": "{{instance}} XmitErr"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "GPU Fabric Status",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 42
+            },
+            "id": 29,
+            "panels": []
+        },
+        {
+            "id": 30,
+            "title": "GPU Fabric Status per GPU",
+            "description": "gpu_fabric_status \u2014 shows which GPUs are included/excluded from NVLink domains.",
+            "type": "state-timeline",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 43
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "lineWidth": 0,
+                        "fillOpacity": 80
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 1
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 2
+                            },
+                            {
+                                "color": "#8F8F8F",
+                                "value": 3
+                            }
+                        ]
+                    },
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "0": {
+                                    "text": "PASS",
+                                    "color": "#56A64B"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "1": {
+                                    "text": "WARN",
+                                    "color": "#E0A939"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "2": {
+                                    "text": "FAIL",
+                                    "color": "#C04040"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "3": {
+                                    "text": "UNK",
+                                    "color": "#8F8F8F"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "overrides": []
+            },
+            "options": {
+                "showValue": "auto",
+                "mergeValues": true,
+                "alignValue": "center",
+                "rowHeight": 0.85,
+                "tooltip": {
+                    "mode": "multi"
+                },
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu_fabric_status{node=~\"$node\", gpu=~\"$gpu_id\"}",
+                    "legendFormat": "{{instance}} GPU{{gpu}}"
+                }
+            ]
+        }
+    ],
+    "links": [
+        {
+            "title": "00 Executive Fleet Overview",
+            "type": "link",
+            "icon": "dashboard",
+            "url": "/d/bmaas-00-fleet-overview?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "targetBlank": false
+        },
+        {
+            "title": "01 GPU Health & Diagnostics",
+            "type": "link",
+            "icon": "dashboard",
+            "url": "/d/bmaas-01-gpu-health?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "targetBlank": false
+        },
+        {
+            "title": "02 Infrastructure & Hardware",
+            "type": "link",
+            "icon": "dashboard",
+            "url": "/d/bmaas-02-infra-health?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "targetBlank": false
+        },
+        {
+            "title": "03 Network Fabric",
+            "type": "link",
+            "icon": "dashboard",
+            "url": "/d/bmaas-03-network-fabric?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "targetBlank": false
+        },
+        {
+            "title": "04 Workload & Jobs",
+            "type": "link",
+            "icon": "dashboard",
+            "url": "/d/bmaas-04-workload-perf?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "targetBlank": false
+        },
+        {
+            "title": "05 Burn-in & Certification",
+            "type": "link",
+            "icon": "dashboard",
+            "url": "/d/bmaas-05-burnin-cert?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "targetBlank": false
+        },
+        {
+            "title": "06 SLA Compliance",
+            "type": "link",
+            "icon": "dashboard",
+            "url": "/d/bmaas-06-sla-compliance?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "targetBlank": false
+        }
+    ]
+}

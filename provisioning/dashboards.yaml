@@ -1,0 +1,14 @@
+apiVersion: 1
+
+providers:
+  - name: 'BMaaS Monitoring'
+    orgId: 1
+    folder: 'BMaaS - AI Compute Platform'
+    folderUid: 'bmaas-ai-compute'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/dashboards/bmaas
+      foldersFromFilesStructure: false
