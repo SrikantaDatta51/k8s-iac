@@ -55,17 +55,17 @@ E  = 'entity=~"$node"'
 CL = 'cluster=~"$cluster"'
 EC = E + ',' + CL  # entity + cluster combined filter
 
-# ── Dashboard UIDs (5 dashboards only — 05/06 deleted) ──
+# ── Dashboard UIDs — V6 (5 dashboards only — 05/06 deleted) ──
 UIDS = {
-    "00": "bmaas-00-fleet-overview",
-    "01": "bmaas-01-gpu-health",
-    "02": "bmaas-02-infra-health",
-    "03": "bmaas-03-network-fabric",
-    "04": "bmaas-04-workload-perf",
+    "00": "bmaas-00-fleet-overview-v6",
+    "01": "bmaas-01-gpu-health-v6",
+    "02": "bmaas-02-infra-health-v6",
+    "03": "bmaas-03-network-fabric-v6",
+    "04": "bmaas-04-workload-perf-v6",
 }
 
-# Folder name prefix for dashboard links (matches Grafana folder import path)
-DASHBOARD_FOLDER = "bmaas-dashboards"
+# Folder name in Grafana where dashboards are imported
+DASHBOARD_FOLDER = "BMaaS QA SKT"
 
 def dashboard_link(uid, title):
     return f"/d/{uid}?orgId=1&var-datasource=${{datasource}}&var-node=${{node}}&var-cluster=${{cluster}}"

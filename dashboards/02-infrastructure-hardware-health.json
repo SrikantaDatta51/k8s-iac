@@ -15,8 +15,8 @@
         }
     ],
     "id": null,
-    "uid": "bmaas-02-infra-health",
-    "title": "BMaaS \u2014 02 Infrastructure & Hardware Health",
+    "uid": "bmaas-02-infra-health-v6",
+    "title": "BMaaS \u2014 02 Infrastructure & Hardware Health V6",
     "description": "Power/energy per entity, cooling/thermal, NVMe storage, memory/CPU, network I/O, system health.",
     "tags": [
         "bmaas",
@@ -25,7 +25,8 @@
         "power",
         "cooling",
         "storage",
-        "bcm11"
+        "bcm11",
+        "v6"
     ],
     "style": "dark",
     "timezone": "browser",
@@ -2198,35 +2199,35 @@
             "title": "00 Executive Fleet Overview",
             "type": "link",
             "icon": "dashboard",
-            "url": "/d/bmaas-00-fleet-overview?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "url": "/d/bmaas-00-fleet-overview-v6?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
             "targetBlank": false
         },
         {
             "title": "01 GPU Health & Diagnostics",
             "type": "link",
             "icon": "dashboard",
-            "url": "/d/bmaas-01-gpu-health?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "url": "/d/bmaas-01-gpu-health-v6?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
             "targetBlank": false
         },
         {
             "title": "02 Infrastructure & Hardware",
             "type": "link",
             "icon": "dashboard",
-            "url": "/d/bmaas-02-infra-health?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "url": "/d/bmaas-02-infra-health-v6?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
             "targetBlank": false
         },
         {
             "title": "03 Network Fabric",
             "type": "link",
             "icon": "dashboard",
-            "url": "/d/bmaas-03-network-fabric?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "url": "/d/bmaas-03-network-fabric-v6?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
             "targetBlank": false
         },
         {
             "title": "04 Workload & Jobs",
             "type": "link",
             "icon": "dashboard",
-            "url": "/d/bmaas-04-workload-perf?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
+            "url": "/d/bmaas-04-workload-perf-v6?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
             "targetBlank": false
         }
     ]

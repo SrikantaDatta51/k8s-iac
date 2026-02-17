@@ -226,10 +226,10 @@ def build_04():
 
     return wrap_dashboard(
         uid=UIDS["04"],
-        title="BMaaS — 04 Workload & Job Performance",
+        title="BMaaS — 04 Workload & Job Performance V6",
         description="GPU utilization during jobs, per-GPU clock/power, throttle/thermal, "
                     "ECC error correlation, recovery checks, memory pressure.",
-        tags=["bmaas","workload","job","performance","gpu","utilization","bcm11"],
+        tags=["bmaas","workload","job","performance","gpu","utilization","bcm11","v6"],
         panels=panels,
         templating=standard_templating(),
         links=sub_dashboard_links()

@@ -11,7 +11,7 @@ v4 OVERHAUL:
 import json, sys
 from panel_builders import *
 
-IB_PORTS = [30, 33, 34, 35, 4, 5, 7, 8, 9]
+IB_PORTS = [4, 7, 8, 9, 10, 13, 14, 15]
 
 def build_03():
     reset_ids()
@@ -251,10 +251,10 @@ def build_03():
 
     return wrap_dashboard(
         uid=UIDS["03"],
-        title="BMaaS — 03 Network Fabric Monitoring",
+        title="BMaaS — 03 Network Fabric Monitoring V6",
         description="GPU NVLink health (gpu_nvlink_* metrics), managed switches, "
                     "InfiniBand per-port MLX5, system network I/O, NIC details.",
-        tags=["bmaas","network","nvlink","infiniband","fabric","switches","bcm11"],
+        tags=["bmaas","network","nvlink","infiniband","fabric","switches","bcm11","v6"],
         panels=panels,
         templating=standard_templating(),
         links=sub_dashboard_links()

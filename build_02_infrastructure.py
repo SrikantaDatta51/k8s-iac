@@ -338,10 +338,10 @@ def build_02():
 
     return wrap_dashboard(
         uid=UIDS["02"],
-        title="BMaaS — 02 Infrastructure & Hardware Health",
+        title="BMaaS — 02 Infrastructure & Hardware Health V6",
         description="Power/energy per entity, cooling/thermal, NVMe storage, "
                     "memory/CPU, network I/O, system health.",
-        tags=["bmaas","infrastructure","hardware","power","cooling","storage","bcm11"],
+        tags=["bmaas","infrastructure","hardware","power","cooling","storage","bcm11","v6"],
         panels=panels,
         templating=standard_templating(),
         links=sub_dashboard_links()

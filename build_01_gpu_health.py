@@ -341,10 +341,10 @@ def build_01():
 
     return wrap_dashboard(
         uid=UIDS["01"],
-        title="BMaaS — 01 GPU Health & Diagnostics",
+        title="BMaaS — 01 GPU Health & Diagnostics V6",
         description="Per-GPU deep-dive: DCGM health matrix, ECC SBE/DBE, row remapping, "
                     "temperature (core+HBM), power/throttle, clock/perfstate, NVLink errors.",
-        tags=["bmaas","gpu","health","diagnostics","ecc","nvlink","b200","bcm11"],
+        tags=["bmaas","gpu","health","diagnostics","ecc","nvlink","b200","bcm11","v6"],
         panels=panels,
         templating=standard_templating(),
         links=sub_dashboard_links()
