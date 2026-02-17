@@ -17,14 +17,14 @@
     "id": null,
     "uid": "bmaas-03-network-fabric",
     "title": "BMaaS \u2014 03 Network Fabric Monitoring",
-    "description": "NVLink switches, port health, bandwidth, NMX compute/GPU/switch/domain health, InfiniBand throughput and errors, GPU fabric status.",
+    "description": "GPU NVLink health (gpu_nvlink_* metrics), managed switches, InfiniBand per-port MLX5, system network I/O, NIC details.",
     "tags": [
         "bmaas",
         "network",
         "nvlink",
         "infiniband",
-        "nmx",
         "fabric",
+        "switches",
         "bcm11"
     ],
     "style": "dark",
@@ -62,9 +62,12 @@
             {
                 "name": "datasource",
                 "type": "datasource",
-                "label": "Prometheus Data Source",
+                "label": "Data Source",
                 "query": "prometheus",
-                "current": {},
+                "current": {
+                    "text": "Mimir BCM Metrics",
+                    "value": "Mimir BCM Metrics"
+                },
                 "hide": 0,
                 "includeAll": false,
                 "multi": false,
@@ -86,9 +89,12 @@
                     "query": "label_values(up, cluster)",
                     "refId": "cl"
                 },
-                "current": {},
+                "current": {
+                    "text": "su56",
+                    "value": "su56"
+                },
                 "hide": 0,
-                "includeAll": true,
+                "includeAll": false,
                 "multi": false,
                 "options": [],
                 "refresh": 2,
@@ -99,47 +105,25 @@
             {
                 "name": "node",
                 "type": "query",
-                "label": "Node",
+                "label": "Node (DGX)",
                 "datasource": {
                     "type": "prometheus",
                     "uid": "${datasource}"
                 },
-                "definition": "label_values(up{cluster=~\"$cluster\"}, instance)",
+                "definition": "label_values({cluster=~\"$cluster\"}, entity)",
                 "query": {
-                    "query": "label_values(up{cluster=~\"$cluster\"}, instance)",
+                    "query": "label_values({cluster=~\"$cluster\"}, entity)",
                     "refId": "nd"
                 },
                 "current": {},
                 "hide": 0,
                 "includeAll": true,
                 "multi": true,
+                "allValue": ".*",
                 "options": [],
                 "refresh": 2,
-                "regex": "",
+                "regex": "/skt-dgx.*/",
                 "sort": 1,
-                "skipUrlSync": false
-            },
-            {
-                "name": "gpu_id",
-                "type": "query",
-                "label": "GPU ID",
-                "datasource": {
-                    "type": "prometheus",
-                    "uid": "${datasource}"
-                },
-                "definition": "label_values(gpu_utilization{node=~\"$node\"}, gpu)",
-                "query": {
-                    "query": "label_values(gpu_utilization{node=~\"$node\"}, gpu)",
-                    "refId": "gp"
-                },
-                "current": {},
-                "hide": 0,
-                "includeAll": true,
-                "multi": true,
-                "options": [],
-                "refresh": 2,
-                "regex": "",
-                "sort": 3,
                 "skipUrlSync": false
             }
         ]
@@ -147,7 +131,7 @@
     "panels": [
         {
             "type": "row",
-            "title": "NVLink Fabric Overview",
+            "title": "NVLink Health Overview",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
@@ -160,17 +144,78 @@
         },
         {
             "id": 2,
-            "title": "NVLink Switches UP",
-            "description": "NVLinkSwitchesUp from ClusterTotal data producer.",
+            "title": "GPU NVLink Health per Entity",
+            "description": "WHY: NVLink health per DGX node \u2014 0 = all links healthy, > 0 = degraded.\n\nMETRIC: gpu_health_nvlink \u2014 DCGM NVLink health check.\nSIGNIFICANCE: Unhealthy NVLink = reduced multi-GPU bandwidth \u2192 training slowdown.\nACTION: > 0 \u2192 check NVLink cables, NVSwitch on affected node.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 0,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Health (0=OK)",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu_health_nvlink{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
+                }
+            ]
+        },
+        {
+            "id": 3,
+            "title": "Managed Switches UP",
+            "description": "WHY: External ToR/spine switches connect DGX nodes to data center network.\n\nMETRIC: managed_switches_up.\nSIGNIFICANCE: DOWN = node(s) isolated from network.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 5,
-                "w": 6,
-                "x": 0,
+                "h": 6,
+                "w": 4,
+                "x": 8,
                 "y": 1
             },
             "fieldConfig": {
@@ -200,7 +245,7 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
+                "textMode": "value",
                 "colorMode": "background",
                 "graphMode": "none",
                 "justifyMode": "center"
@@ -212,25 +257,25 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum(NVLinkSwitchesUp{cluster=~\"$cluster\"}}) or vector(0)",
-                    "legendFormat": "",
+                    "expr": "sum(managed_switches_up{cluster=~\"$cluster\"}) or vector(0)",
+                    "legendFormat": "UP",
                     "instant": true
                 }
             ]
         },
         {
-            "id": 3,
-            "title": "NVLink Switches DOWN",
-            "description": "NVLinkSwitchesDown from ClusterTotal data producer.",
+            "id": 4,
+            "title": "Managed Switches DOWN",
+            "description": "WHY: Network switch failure = node isolation.\n\nMETRIC: managed_switches_down.\nACTION: > 0 = check switch, cables, config.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 5,
-                "w": 6,
-                "x": 6,
+                "h": 6,
+                "w": 4,
+                "x": 12,
                 "y": 1
             },
             "fieldConfig": {
@@ -264,7 +309,7 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
+                "textMode": "value",
                 "colorMode": "background",
                 "graphMode": "none",
                 "justifyMode": "center"
@@ -276,25 +321,25 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum(NVLinkSwitchesDown{cluster=~\"$cluster\"}}) or vector(0)",
-                    "legendFormat": "",
+                    "expr": "sum(managed_switches_down{cluster=~\"$cluster\"}) or vector(0)",
+                    "legendFormat": "DOWN",
                     "instant": true
                 }
             ]
         },
         {
-            "id": 4,
-            "title": "NVLink Switches CLOSED",
-            "description": "NVLinkSwitchesClosed from ClusterTotal data producer.",
+            "id": 5,
+            "title": "Managed Switches Closed",
+            "description": "WHY: CLOSED = intentionally taken offline for maintenance.\n\nMETRIC: managed_switches_closed.\nNOTE: Normal during infrastructure changes.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 5,
-                "w": 6,
-                "x": 12,
+                "h": 6,
+                "w": 4,
+                "x": 16,
                 "y": 1
             },
             "fieldConfig": {
@@ -305,8 +350,12 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "#E0A939",
+                                "color": "#56A64B",
                                 "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 1
                             }
                         ]
                     },
@@ -324,7 +373,7 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
+                "textMode": "value",
                 "colorMode": "background",
                 "graphMode": "none",
                 "justifyMode": "center"
@@ -336,25 +385,25 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum(NVLinkSwitchesClosed{cluster=~\"$cluster\"}}) or vector(0)",
-                    "legendFormat": "",
+                    "expr": "sum(managed_switches_closed{cluster=~\"$cluster\"}) or vector(0)",
+                    "legendFormat": "Closed",
                     "instant": true
                 }
             ]
         },
         {
-            "id": 5,
-            "title": "NVLink Switches Total",
-            "description": "NVLinkSwitchesTotal from ClusterTotal data producer.",
+            "id": 6,
+            "title": "Managed Switches Total",
+            "description": "WHY: Baseline count for network fabric.\n\nMETRIC: managed_switches_total.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 5,
-                "w": 6,
-                "x": 18,
+                "h": 6,
+                "w": 4,
+                "x": 20,
                 "y": 1
             },
             "fieldConfig": {
@@ -384,8 +433,8 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
+                "textMode": "value",
+                "colorMode": "value",
                 "graphMode": "none",
                 "justifyMode": "center"
             },
@@ -396,29 +445,29 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum(NVLinkSwitchesTotal{cluster=~\"$cluster\"}}) or vector(0)",
-                    "legendFormat": "",
+                    "expr": "sum(managed_switches_total{cluster=~\"$cluster\"}) or vector(0)",
+                    "legendFormat": "Total",
                     "instant": true
                 }
             ]
         },
         {
             "type": "row",
-            "title": "NVLink Port Health",
+            "title": "GPU NVLink Errors & Bandwidth",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 6
+                "y": 7
             },
-            "id": 6,
+            "id": 7,
             "panels": []
         },
         {
-            "id": 7,
-            "title": "NVLink Port Link State",
-            "description": "RF_NVLink_Resource_LinkState \u2014 per-port link status. Active = healthy.",
+            "id": 8,
+            "title": "GPU NVLink CRC Data Errors",
+            "description": "WHY: CRC errors = data integrity failures on NVLink interconnect.\n\nMETRIC: gpu_nvlink_crc_data_errors \u2014 cumulative CRC error count.\nACTION: Rising = cable or connector degrading. Reseat or replace.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -428,7 +477,7 @@
                 "h": 6,
                 "w": 8,
                 "x": 0,
-                "y": 7
+                "y": 8
             },
             "fieldConfig": {
                 "defaults": {
@@ -437,66 +486,7 @@
                         "lineWidth": 2,
                         "fillOpacity": 10,
                         "gradientMode": "none",
-                        "axisLabel": "Link State",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "RF_NVLink_Resource_LinkState{node=~\"$node\"}",
-                    "legendFormat": "{{instance}} Port{{port}}"
-                }
-            ]
-        },
-        {
-            "id": 8,
-            "title": "NVLink Port Bit Error Rate",
-            "description": "RF_NVLink_Port_Nvidia_BitErrorRate \u2014 rising = NVLink degradation.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 8,
-                "x": 8,
-                "y": 7
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "BER",
+                        "axisLabel": "CRC Errors",
                         "drawStyle": "line",
                         "pointSize": 4,
                         "showPoints": "never",
@@ -530,7 +520,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -544,15 +536,76 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "RF_NVLink_Port_Nvidia_BitErrorRate{node=~\"$node\"}",
-                    "legendFormat": "{{instance}} Port{{port}}"
+                    "expr": "gpu_nvlink_crc_data_errors{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
                 }
             ]
         },
         {
             "id": 9,
-            "title": "NVLink Port Link Downed",
-            "description": "RF_NVLink_Port_Nvidia_LinkDowned \u2014 > 0 = link failures occurred.",
+            "title": "GPU NVLink CRC Flit Errors",
+            "description": "WHY: Flit = smallest NVLink transfer unit. Flit CRC = link-level noise.\n\nMETRIC: gpu_nvlink_crc_flit_errors.\nSIGNIFICANCE: Lower severity than data errors but indicates link quality.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 8,
+                "y": 8
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Flit Errors",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu_nvlink_crc_flit_errors{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
+                }
+            ]
+        },
+        {
+            "id": 10,
+            "title": "GPU NVLink Total Bandwidth",
+            "description": "WHY: Verify NVLink fabric is delivering expected throughput.\n\nMETRIC: gpu_nvlink_total_bandwidth \u2014 aggregate NVLink BW.\nSIGNIFICANCE: B200 NVLink expected ~900GB/s per GPU pair.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -562,7 +615,336 @@
                 "h": 6,
                 "w": 8,
                 "x": 16,
-                "y": 7
+                "y": 8
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Bandwidth",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu_nvlink_total_bandwidth{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
+                }
+            ]
+        },
+        {
+            "id": 11,
+            "title": "GPU Fabric Status",
+            "description": "WHY: Shows if each GPU is part of the NVLink domain.\n\nMETRIC: GPU_fabric_status \u2014 0 = included, > 0 = excluded.\nACTION: Excluded GPU loses multi-GPU capability.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 0,
+                "y": 14
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Status",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "GPU_fabric_status{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
+                }
+            ]
+        },
+        {
+            "id": 12,
+            "title": "GPU NVLink Health Trend",
+            "description": "WHY: Track NVLink health over time \u2014 detect degradation patterns.\n\nMETRIC: gpu_health_nvlink.\nSIGNIFICANCE: Periodic spikes = intermittent cable issue.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 12,
+                "y": 14
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Health (0=OK)",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu_health_nvlink{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "InfiniBand Port Health (MLX5)",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 20
+            },
+            "id": 13,
+            "panels": []
+        },
+        {
+            "id": 14,
+            "title": "IB Link State (All Ports)",
+            "description": "WHY: InfiniBand link state shows port connectivity.\n\nMETRIC: infiniband_mlx5_*_link_state \u2014 5=LinkUp, 1=Down.\nSIGNIFICANCE: All ports should be 5 (LinkUp) for full IB bandwidth.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 0,
+                "y": 21
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Link State",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_30_link_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_30"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_33_link_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_33"
+                },
+                {
+                    "refId": "C",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_34_link_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_34"
+                },
+                {
+                    "refId": "D",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_35_link_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_35"
+                },
+                {
+                    "refId": "E",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_4_link_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_4"
+                },
+                {
+                    "refId": "F",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_5_link_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_5"
+                },
+                {
+                    "refId": "G",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_7_link_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_7"
+                },
+                {
+                    "refId": "H",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_8_link_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_8"
+                },
+                {
+                    "refId": "I",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_9_link_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_9"
+                }
+            ]
+        },
+        {
+            "id": 15,
+            "title": "IB Link Downed Count",
+            "description": "WHY: Each link-down event = network disruption for running jobs.\n\nMETRIC: infiniband_mlx5_*_link_downed \u2014 cumulative flap counter.\nACTION: Rising = cable/HCA issue. Reseat or replace.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 12,
+                "y": 21
             },
             "fieldConfig": {
                 "defaults": {
@@ -589,7 +971,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -603,198 +987,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "RF_NVLink_Port_Nvidia_LinkDowned{node=~\"$node\"}",
-                    "legendFormat": "{{instance}} Port{{port}}"
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "NVLink Bandwidth",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 13
-            },
-            "id": 10,
-            "panels": []
-        },
-        {
-            "id": 11,
-            "title": "NVLink Port RX Bandwidth",
-            "description": "RF_NVLink_Port_RX \u2014 receive throughput per NVLink port.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 8,
-                "x": 0,
-                "y": 14
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "Bps",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "RX Bandwidth",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "RF_NVLink_Port_RX{node=~\"$node\"}",
-                    "legendFormat": "{{instance}} Port{{port}}"
-                }
-            ]
-        },
-        {
-            "id": 12,
-            "title": "NVLink Port TX Bandwidth",
-            "description": "RF_NVLink_Port_TX \u2014 transmit throughput per NVLink port.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 8,
-                "x": 8,
-                "y": 14
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "Bps",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "TX Bandwidth",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "RF_NVLink_Port_TX{node=~\"$node\"}",
-                    "legendFormat": "{{instance}} Port{{port}}"
-                }
-            ]
-        },
-        {
-            "id": 13,
-            "title": "NVLink Speed: Current vs Max",
-            "description": "RF_NVLink_Resource_CurrentSpeed vs RF_NVLink_Resource_MaxSpeed.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 8,
-                "x": 16,
-                "y": 14
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Speed",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "RF_NVLink_Resource_CurrentSpeed{node=~\"$node\"}",
-                    "legendFormat": "{{instance}} Current"
+                    "expr": "infiniband_mlx5_30_link_downed{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_30"
                 },
                 {
                     "refId": "B",
@@ -802,130 +996,122 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "RF_NVLink_Resource_MaxSpeed{node=~\"$node\"}",
-                    "legendFormat": "{{instance}} Max"
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "NMX Telemetry (NVLink Monitoring)",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 20
-            },
-            "id": 14,
-            "panels": []
-        },
-        {
-            "id": 15,
-            "title": "NMX Compute Healthy",
-            "description": "nmxm_compute_health_count \u2014 nodes in healthy state.",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 0,
-                "y": 21
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "none",
-                    "decimals": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#56A64B",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "mappings": [],
-                    "noValue": "N/A"
+                    "expr": "infiniband_mlx5_33_link_downed{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_33"
                 },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
                 {
-                    "refId": "A",
+                    "refId": "C",
                     "datasource": {
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum(nmxm_compute_health_count{cluster=~\"$cluster\", state=\"healthy\"}) or vector(0)",
-                    "legendFormat": "",
-                    "instant": true
+                    "expr": "infiniband_mlx5_34_link_downed{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_34"
+                },
+                {
+                    "refId": "D",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_35_link_downed{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_35"
+                },
+                {
+                    "refId": "E",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_4_link_downed{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_4"
+                },
+                {
+                    "refId": "F",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_5_link_downed{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_5"
+                },
+                {
+                    "refId": "G",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_7_link_downed{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_7"
+                },
+                {
+                    "refId": "H",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_8_link_downed{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_8"
+                },
+                {
+                    "refId": "I",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_9_link_downed{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_9"
                 }
             ]
         },
         {
             "id": 16,
-            "title": "NMX Compute Degraded",
-            "description": "nmxm_compute_health_count \u2014 nodes in degraded state.",
-            "type": "stat",
+            "title": "IB Port Rate",
+            "description": "WHY: Verify negotiated link speed matches expected (400Gbps ConnectX-7).\n\nMETRIC: infiniband_mlx5_*_rate.\nACTION: Lower-than-expected = cable quality issue or port config.",
+            "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 6,
-                "y": 21
+                "h": 6,
+                "w": 12,
+                "x": 0,
+                "y": 27
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "none",
-                    "decimals": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#E0A939",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "mappings": [],
-                    "noValue": "N/A"
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Rate (Gbps)",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
                 },
                 "overrides": []
             },
             "options": {
-                "reduceOptions": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
                     "calcs": [
+                        "min",
+                        "max",
+                        "mean",
                         "lastNotNull"
                     ],
-                    "fields": "",
-                    "values": false
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "center"
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
             },
             "targets": [
                 {
@@ -934,376 +1120,87 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum(nmxm_compute_health_count{cluster=~\"$cluster\", state=\"degraded\"}) or vector(0)",
-                    "legendFormat": "",
-                    "instant": true
+                    "expr": "infiniband_mlx5_30_rate{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_30"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_33_rate{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_33"
+                },
+                {
+                    "refId": "C",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_34_rate{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_34"
+                },
+                {
+                    "refId": "D",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_35_rate{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_35"
+                },
+                {
+                    "refId": "E",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_4_rate{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_4"
+                },
+                {
+                    "refId": "F",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_5_rate{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_5"
+                },
+                {
+                    "refId": "G",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_7_rate{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_7"
+                },
+                {
+                    "refId": "H",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_8_rate{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_8"
+                },
+                {
+                    "refId": "I",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_9_rate{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_9"
                 }
             ]
         },
         {
             "id": 17,
-            "title": "NMX Compute Unhealthy",
-            "description": "nmxm_compute_health_count \u2014 nodes in unhealthy state.",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 12,
-                "y": 21
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "none",
-                    "decimals": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#C04040",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "mappings": [],
-                    "noValue": "N/A"
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(nmxm_compute_health_count{cluster=~\"$cluster\", state=\"unhealthy\"}) or vector(0)",
-                    "legendFormat": "",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 18,
-            "title": "NMX Compute Unknown",
-            "description": "nmxm_compute_health_count \u2014 nodes in unknown state.",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 18,
-                "y": 21
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "none",
-                    "decimals": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#8F8F8F",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "mappings": [],
-                    "noValue": "N/A"
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(nmxm_compute_health_count{cluster=~\"$cluster\", state=\"unknown\"}) or vector(0)",
-                    "legendFormat": "",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 19,
-            "title": "NMX GPU Healthy",
-            "description": "nmxm_gpu_health_count \u2014 GPUs in healthy state.",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 0,
-                "y": 25
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "none",
-                    "decimals": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#56A64B",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "mappings": [],
-                    "noValue": "N/A"
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(nmxm_gpu_health_count{cluster=~\"$cluster\", state=\"healthy\"}) or vector(0)",
-                    "legendFormat": "",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 20,
-            "title": "NMX GPU Degraded",
-            "description": "nmxm_gpu_health_count \u2014 GPUs in degraded state.",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 6,
-                "y": 25
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "none",
-                    "decimals": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#E0A939",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "mappings": [],
-                    "noValue": "N/A"
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(nmxm_gpu_health_count{cluster=~\"$cluster\", state=\"degraded\"}) or vector(0)",
-                    "legendFormat": "",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 21,
-            "title": "NMX GPU Degraded BW",
-            "description": "nmxm_gpu_health_count \u2014 GPUs in degraded_bw state.",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 12,
-                "y": 25
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "none",
-                    "decimals": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#EF843C",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "mappings": [],
-                    "noValue": "N/A"
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(nmxm_gpu_health_count{cluster=~\"$cluster\", state=\"degraded_bw\"}) or vector(0)",
-                    "legendFormat": "",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 22,
-            "title": "NMX Non-NVLink GPUs",
-            "description": "nmxm_gpu_health_count \u2014 GPUs in nonvlink state.",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 18,
-                "y": 25
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "none",
-                    "decimals": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#8F8F8F",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "mappings": [],
-                    "noValue": "N/A"
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(nmxm_gpu_health_count{cluster=~\"$cluster\", state=\"nonvlink\"}) or vector(0)",
-                    "legendFormat": "",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 23,
-            "title": "NMX Switch Health",
-            "description": "nmxm_switch_health_count \u2014 healthy / missing_nvlink / unhealthy / unknown.",
+            "title": "IB Physical State",
+            "description": "WHY: Physical layer state \u2014 5=LinkUp, 2=Polling (trying to connect).\n\nMETRIC: infiniband_mlx5_*_phys_state.\nSIGNIFICANCE: Stuck in Polling = cable/port mismatch.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1312,8 +1209,8 @@
             "gridPos": {
                 "h": 6,
                 "w": 12,
-                "x": 0,
-                "y": 29
+                "x": 12,
+                "y": 27
             },
             "fieldConfig": {
                 "defaults": {
@@ -1322,7 +1219,7 @@
                         "lineWidth": 2,
                         "fillOpacity": 10,
                         "gradientMode": "none",
-                        "axisLabel": "Count",
+                        "axisLabel": "PhysState",
                         "drawStyle": "line",
                         "pointSize": 4,
                         "showPoints": "never",
@@ -1340,7 +1237,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -1354,87 +1253,100 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "nmxm_switch_health_count{cluster=~\"$cluster\"}}",
-                    "legendFormat": "{{state}}"
-                }
-            ]
-        },
-        {
-            "id": 24,
-            "title": "NMX Domain Health",
-            "description": "nmxm_domain_health_count \u2014 domain health aggregation. Unhealthy = multi-node at risk.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 12,
-                "x": 12,
-                "y": 29
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Count",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
+                    "expr": "infiniband_mlx5_30_phys_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_30"
                 },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
                 {
-                    "refId": "A",
+                    "refId": "B",
                     "datasource": {
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "nmxm_domain_health_count{cluster=~\"$cluster\"}}",
-                    "legendFormat": "{{state}}"
+                    "expr": "infiniband_mlx5_33_phys_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_33"
+                },
+                {
+                    "refId": "C",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_34_phys_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_34"
+                },
+                {
+                    "refId": "D",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_35_phys_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_35"
+                },
+                {
+                    "refId": "E",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_4_phys_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_4"
+                },
+                {
+                    "refId": "F",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_5_phys_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_5"
+                },
+                {
+                    "refId": "G",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_7_phys_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_7"
+                },
+                {
+                    "refId": "H",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_8_phys_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_8"
+                },
+                {
+                    "refId": "I",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "infiniband_mlx5_9_phys_state{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} mlx5_9"
                 }
             ]
         },
         {
             "type": "row",
-            "title": "InfiniBand Fabric",
+            "title": "System Network I/O",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 35
+                "y": 33
             },
-            "id": 25,
+            "id": 18,
             "panels": []
         },
         {
-            "id": 26,
-            "title": "IB Data Received",
-            "description": "ib_rcv_data \u2014 InfiniBand receive throughput per port.",
+            "id": 19,
+            "title": "System Bytes Recv / Sent",
+            "description": "WHY: System-level network throughput for data plane.\n\nMETRICS: bytes_recv + bytes_sent.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1444,7 +1356,7 @@
                 "h": 6,
                 "w": 8,
                 "x": 0,
-                "y": 36
+                "y": 34
             },
             "fieldConfig": {
                 "defaults": {
@@ -1453,7 +1365,7 @@
                         "lineWidth": 2,
                         "fillOpacity": 10,
                         "gradientMode": "none",
-                        "axisLabel": "RX Rate",
+                        "axisLabel": "Bytes/s",
                         "drawStyle": "line",
                         "pointSize": 4,
                         "showPoints": "never",
@@ -1471,7 +1383,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -1485,15 +1399,24 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "rate(ib_rcv_data{node=~\"$node\"}[5m])",
-                    "legendFormat": "{{instance}} {{port}}"
+                    "expr": "bytes_recv{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} Recv"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "bytes_sent{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} Sent"
                 }
             ]
         },
         {
-            "id": 27,
-            "title": "IB Data Transmitted",
-            "description": "ib_xmit_data \u2014 InfiniBand transmit throughput per port.",
+            "id": 20,
+            "title": "IP Traffic",
+            "description": "WHY: IP-level traffic volume \u2014 overall network usage.\n\nMETRICS: ip_in_receives + ip_out_requests.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1503,16 +1426,16 @@
                 "h": 6,
                 "w": 8,
                 "x": 8,
-                "y": 36
+                "y": 34
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "Bps",
+                    "unit": "short",
                     "custom": {
                         "lineWidth": 2,
                         "fillOpacity": 10,
                         "gradientMode": "none",
-                        "axisLabel": "TX Rate",
+                        "axisLabel": "Packets/s",
                         "drawStyle": "line",
                         "pointSize": 4,
                         "showPoints": "never",
@@ -1530,7 +1453,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -1544,15 +1469,24 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "rate(ib_xmit_data{node=~\"$node\"}[5m])",
-                    "legendFormat": "{{instance}} {{port}}"
+                    "expr": "ip_in_receives{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} In"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "ip_out_requests{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} Out"
                 }
             ]
         },
         {
-            "id": 28,
-            "title": "IB Errors",
-            "description": "ib_rcv_err / ib_xmit_err \u2014 InfiniBand error counters.",
+            "id": 21,
+            "title": "TCP Retransmissions",
+            "description": "WHY: TCP retransmits indicate network congestion or packet loss.\n\nMETRIC: tcp_retrans_segs.\nACTION: Sustained high = check switch buffering, cable quality.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1562,7 +1496,7 @@
                 "h": 6,
                 "w": 8,
                 "x": 16,
-                "y": 36
+                "y": 34
             },
             "fieldConfig": {
                 "defaults": {
@@ -1571,7 +1505,7 @@
                         "lineWidth": 2,
                         "fillOpacity": 10,
                         "gradientMode": "none",
-                        "axisLabel": "Errors/s",
+                        "axisLabel": "Retransmits",
                         "drawStyle": "line",
                         "pointSize": 4,
                         "showPoints": "never",
@@ -1589,7 +1523,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -1603,127 +1539,71 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "rate(ib_rcv_err{node=~\"$node\"}[5m])",
-                    "legendFormat": "{{instance}} RcvErr"
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "rate(ib_xmit_err{node=~\"$node\"}[5m])",
-                    "legendFormat": "{{instance}} XmitErr"
+                    "expr": "tcp_retrans_segs{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
                 }
             ]
         },
         {
             "type": "row",
-            "title": "GPU Fabric Status",
+            "title": "NIC Interface Details",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 42
+                "y": 40
             },
-            "id": 29,
+            "id": 22,
             "panels": []
         },
         {
-            "id": 30,
-            "title": "GPU Fabric Status per GPU",
-            "description": "gpu_fabric_status \u2014 shows which GPUs are included/excluded from NVLink domains.",
-            "type": "state-timeline",
+            "id": 23,
+            "title": "NIC Speed",
+            "description": "WHY: Verify link speed negotiation.\n\nMETRIC: sys_class_net_speed \u2014 per-interface link speed (Mbps).\nEXPECTED: 400000 for 400GbE, 100000 for 100GbE.",
+            "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 8,
-                "w": 24,
+                "h": 6,
+                "w": 6,
                 "x": 0,
-                "y": 43
+                "y": 41
             },
             "fieldConfig": {
                 "defaults": {
+                    "unit": "short",
                     "custom": {
-                        "lineWidth": 0,
-                        "fillOpacity": 80
-                    },
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#56A64B",
-                                "value": null
-                            },
-                            {
-                                "color": "#E0A939",
-                                "value": 1
-                            },
-                            {
-                                "color": "#C04040",
-                                "value": 2
-                            },
-                            {
-                                "color": "#8F8F8F",
-                                "value": 3
-                            }
-                        ]
-                    },
-                    "mappings": [
-                        {
-                            "type": "value",
-                            "options": {
-                                "0": {
-                                    "text": "PASS",
-                                    "color": "#56A64B"
-                                }
-                            }
-                        },
-                        {
-                            "type": "value",
-                            "options": {
-                                "1": {
-                                    "text": "WARN",
-                                    "color": "#E0A939"
-                                }
-                            }
-                        },
-                        {
-                            "type": "value",
-                            "options": {
-                                "2": {
-                                    "text": "FAIL",
-                                    "color": "#C04040"
-                                }
-                            }
-                        },
-                        {
-                            "type": "value",
-                            "options": {
-                                "3": {
-                                    "text": "UNK",
-                                    "color": "#8F8F8F"
-                                }
-                            }
-                        }
-                    ]
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Speed (Mbps)",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
                 },
                 "overrides": []
             },
             "options": {
-                "showValue": "auto",
-                "mergeValues": true,
-                "alignValue": "center",
-                "rowHeight": 0.85,
-                "tooltip": {
-                    "mode": "multi"
-                },
                 "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom"
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
                 }
             },
             "targets": [
@@ -1733,8 +1613,191 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "gpu_fabric_status{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}}"
+                    "expr": "sys_class_net_speed{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} {{device}}"
+                }
+            ]
+        },
+        {
+            "id": 24,
+            "title": "NIC MTU",
+            "description": "WHY: Jumbo frames (MTU 9000) required for IB and high-perf networking.\n\nMETRIC: sys_class_net_mtu.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 6,
+                "y": 41
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "MTU",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sys_class_net_mtu{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} {{device}}"
+                }
+            ]
+        },
+        {
+            "id": 25,
+            "title": "NIC Carrier Changes",
+            "description": "WHY: Each carrier change = link flap = disruption.\n\nMETRIC: sys_class_net_carrier_changes \u2014 per-NIC flap counter.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 12,
+                "y": 41
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Changes",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sys_class_net_carrier_changes{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} {{device}}"
+                }
+            ]
+        },
+        {
+            "id": 26,
+            "title": "Frame Errors",
+            "description": "WHY: NIC hardware errors \u2014 bad cables, driver issues.\n\nMETRIC: frame_errors.\nACTION: > 0 = investigate NIC, cable, firmware.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 18,
+                "y": 41
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Errors",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "frame_errors{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
                 }
             ]
         }
@@ -1773,20 +1836,6 @@
             "type": "link",
             "icon": "dashboard",
             "url": "/d/bmaas-04-workload-perf?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
-            "targetBlank": false
-        },
-        {
-            "title": "05 Burn-in & Certification",
-            "type": "link",
-            "icon": "dashboard",
-            "url": "/d/bmaas-05-burnin-cert?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
-            "targetBlank": false
-        },
-        {
-            "title": "06 SLA Compliance",
-            "type": "link",
-            "icon": "dashboard",
-            "url": "/d/bmaas-06-sla-compliance?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
             "targetBlank": false
         }
     ]

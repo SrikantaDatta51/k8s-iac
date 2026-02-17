@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """Dashboard 01 — GPU Health & Diagnostics.
-Per-GPU deep-dive. Answer: 'Which GPUs need replacement? Is a GPU about to fail?'
+Per-GPU deep-dive using indexed metrics (gpu0-gpu7).
+
+v4 OVERHAUL:
+- Fixed all imbalanced braces in queries
+- Use gpu_nvlink_* for NVLink (not nv_link_switches_*)
+- Use gpu_utilization (not total_gpu_utilization)
+- No gauges — stat + timeseries only
+- No DPU or IB node panels (not available)
+- Reverse sorted legends
+- Per-entity bar gauge for GPU count
 """
 import json, sys
 from panel_builders import *
@@ -15,54 +24,69 @@ def build_01():
     # ════════════════════════════════════════════════════════
     panels.append(row("GPU Health Overview", y)); y += 1
 
-    # GPU Health Matrix — state-timeline heatmap
     panels.append(heatmap(
-        "GPU Health Matrix",
-        "Per-node/GPU overall DCGM health status. Red = FAIL, Yellow = WARN, Green = PASS.",
+        "GPU Health Matrix (per Node)",
+        "WHY: Instantly visualize which nodes have GPU health issues.\n\n"
+        "METRIC: gpu_health_overall — DCGM aggregate health check.\n"
+        "0 = PASS (green), > 0 = FAIL (red). Each row = one DGX node.\n"
+        "SIGNIFICANCE: Failed nodes should NOT receive new workloads.\n"
+        "ACTION: Filter by specific node using the dropdown to drill down.",
         {"h":8,"w":12,"x":0,"y":y},
-        [tgt('gpu_health_overall{' + N + ', ' + GPU + '}',
-             '{{instance}} GPU{{gpu}}')]))
+        [tgt('gpu_health_overall{' + EC + '}','{{entity}}')]))
 
-    # Hardware Replacement Decision
+    panels.append(bargauge(
+        "GPUs per Entity",
+        "WHY: Validate hardware config — B200 DGX should have 8 GPUs.\n\n"
+        "METRIC: gpu_count — GPUs detected by DCGM per entity.\n"
+        "SIGNIFICANCE: < 8 = GPU not detected = hardware failure.\n"
+        "ACTION: Check GPU seating, PCIe link, DCGM logs.",
+        {"h":8,"w":6,"x":12,"y":y},
+        [tgt('gpu_count{' + EC + '}','{{entity}}',instant=True)],
+        thresholds={"mode":"absolute","steps":[
+            {"color":C_FL,"value":None},{"color":C_WR,"value":7},
+            {"color":C_OK,"value":8}]}))
+
     panels.append(stat(
-        "⛔ GPUs Needing Replacement",
-        "GPUs with DBE > 0, row remap failure, or uncorrectable remapped rows > 0. "
-        "Any value > 0 = initiate RMA.",
-        {"h":4,"w":6,"x":12,"y":y},
+        "Nodes Needing GPU RMA",
+        "WHY: Proactive RMA tracking to minimize downtime.\n\n"
+        "CRITERIA: gpu_ecc_dbe_agg > 0 (uncorrectable memory) OR "
+        "gpu_row_remap_failure == 1 (HBM repair exhausted) OR "
+        "gpu_uncorrectable_remapped_rows > 0.\n\n"
+        "ACTION: Any > 0 = open RMA ticket with NVIDIA.",
+        {"h":4,"w":6,"x":18,"y":y},
         [tgt('count('
-             '(gpu_ecc_dbe_agg{' + N + '} > 0) or '
-             '(gpu_row_remap_failure{' + N + '} == 1) or '
-             '(gpu_uncorrectable_remapped_rows{' + N + '} > 0)'
-             ') or vector(0)','',instant=True)],
-        color_mode="background",
+             '(gpu_ecc_dbe_agg{' + EC + '} > 0) or '
+             '(gpu_row_remap_failure{' + EC + '} == 1) or '
+             '(gpu_uncorrectable_remapped_rows{' + EC + '} > 0)'
+             ') or vector(0)','RMA Candidates',instant=True)],
+        color_mode="background", text_mode="value",
         thresholds={"mode":"absolute","steps":[
             {"color":C_OK,"value":None},{"color":C_FL,"value":1}]}))
 
-    panels.append(stat(
-        "⚠️ GPUs Approaching Limit",
-        "GPUs with correctable remapped rows > 256 (approaching 512 limit).",
-        {"h":4,"w":6,"x":18,"y":y},
-        [tgt('count(gpu_correctable_remapped_rows{' + N + '} > 256) or vector(0)',
-             '',instant=True)],
-        color_mode="background",
-        thresholds={"mode":"absolute","steps":[
-            {"color":C_OK,"value":None},{"color":C_WR,"value":1}]}))
-
-    # Sub-component health stats
+    # Sub-component health flags
     comps = [
-        ("gpu_health_driver","Driver",C_OK),("gpu_health_mem","Memory",C_OK),
-        ("gpu_health_nvlink","NVLink",C_OK),("gpu_health_pcie","PCIe",C_OK),
-        ("gpu_health_sm","SM",C_OK),("gpu_health_thermal","Thermal",C_OK),
+        ("gpu_health_mem","Memory",
+         "WHY: Detects HBM memory faults — ECC errors, row remapping issues.\n0 = OK, > 0 = memory degrading."),
+        ("gpu_health_nvlink","NVLink",
+         "WHY: NVLink enables 900GB/s GPU-to-GPU communication.\n0 = OK, > 0 = link errors detected."),
+        ("gpu_health_pcie","PCIe",
+         "WHY: PCIe connects GPU to CPU for data transfer.\n0 = OK, > 0 = bus errors."),
+        ("gpu_health_sm","SM",
+         "WHY: Streaming Multiprocessors are the GPU compute units.\n0 = OK, > 0 = compute errors."),
+        ("gpu_health_thermal","Thermal",
+         "WHY: GPU operating within thermal limits.\n0 = OK, > 0 = overheating."),
+        ("gpu_health_overall","Overall",
+         "WHY: DCGM composite health — OR of all sub-checks.\n0 = ALL healthy, > 0 = investigate."),
     ]
-    for i,(metric,label,_) in enumerate(comps):
-        panels.append(stat(label, f"DCGM {label} health check.",
+    for i,(metric,label,desc) in enumerate(comps):
+        panels.append(stat(label, desc,
             {"h":4,"w":2,"x":12+i*2,"y":y+4},
-            [tgt(f'max({metric}{{' + N + ', ' + GPU + '}}) or vector(-1)','',instant=True)],
-            color_mode="background",
+            [tgt(f'max({metric}{{{EC}}}) or vector(-1)','',instant=True)],
+            color_mode="background", text_mode="value",
             mappings=[
                 {"type":"value","options":{"-1":{"text":"N/A","color":C_UK}}},
                 {"type":"value","options":{"0":{"text":"OK","color":C_OK}}},
-                {"type":"value","options":{"1":{"text":"FAIL","color":C_FL}}}],
+                {"type":"range","options":{"from":1,"to":999,"result":{"text":"FAIL","color":C_FL}}}],
             thresholds={"mode":"absolute","steps":[
                 {"color":C_OK,"value":None},{"color":C_FL,"value":1}]}))
     y += 8
@@ -74,28 +98,35 @@ def build_01():
 
     panels.append(ts(
         "ECC Single-Bit Errors (Aggregate)",
-        "gpu_ecc_sbe_agg — correctable errors. Rising trend = early memory degradation.",
+        "WHY: SBE are correctable — the GPU auto-corrects them.\n"
+        "Rising trend = HBM memory slowly degrading.\n\n"
+        "METRIC: gpu_ecc_sbe_agg — lifetime correctable error count.\n"
+        "ACTION: Monitor rate. Rapid increase → schedule maintenance window.",
         {"h":6,"w":8,"x":0,"y":y},
-        [tgt('gpu_ecc_sbe_agg{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}}')],
+        [tgt('gpu_ecc_sbe_agg{' + EC + '}','{{entity}}')],
         axis="SBE Count",
         overrides=[{"matcher":{"id":"byFrameRefID","options":"A"},"properties":[
             {"id":"color","value":{"fixedColor":C_WR,"mode":"fixed"}}]}]))
 
     panels.append(ts(
         "ECC Double-Bit Errors (Aggregate)",
-        "gpu_ecc_dbe_agg — UNCORRECTABLE errors. > 0 = IMMEDIATE REPLACEMENT.",
+        "WHY: DBE are UNCORRECTABLE — data corruption occurred.\n\n"
+        "METRIC: gpu_ecc_dbe_agg — lifetime uncorrectable error count.\n"
+        "ACTION: > 0 = IMMEDIATE GPU REPLACEMENT. Workload results unreliable.",
         {"h":6,"w":8,"x":8,"y":y},
-        [tgt('gpu_ecc_dbe_agg{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}}')],
+        [tgt('gpu_ecc_dbe_agg{' + EC + '}','{{entity}}')],
         axis="DBE Count",
         overrides=[{"matcher":{"id":"byFrameRefID","options":"A"},"properties":[
             {"id":"color","value":{"fixedColor":C_FL,"mode":"fixed"}}]}]))
 
     panels.append(ts(
-        "ECC Volatile (Since Reboot)",
-        "gpu_ecc_sbe_vol / gpu_ecc_dbe_vol — errors since last GPU reset.",
+        "ECC Volatile (Since Last Reset)",
+        "WHY: Volatile counters reset on GPU reset — shows RECENT errors.\n\n"
+        "METRICS: gpu_ecc_sbe_vol + gpu_ecc_dbe_vol.\n"
+        "SIGNIFICANCE: Helps determine if errors are ongoing or historical.",
         {"h":6,"w":8,"x":16,"y":y},
-        [tgt('gpu_ecc_sbe_vol{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}} SBE'),
-         tgt('gpu_ecc_dbe_vol{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}} DBE')],
+        [tgt('gpu_ecc_sbe_vol{' + EC + '}','{{entity}} SBE'),
+         tgt('gpu_ecc_dbe_vol{' + EC + '}','{{entity}} DBE')],
         axis="Errors"))
     y += 6
 
@@ -106,172 +137,218 @@ def build_01():
 
     panels.append(ts(
         "Correctable Remapped Rows",
-        "gpu_correctable_remapped_rows — tracks HBM bank repairs. Limit ~512.",
+        "WHY: HBM memory auto-repairs bad rows by remapping to spares.\n\n"
+        "METRIC: gpu_correctable_remapped_rows — how many rows were repaired.\n"
+        "SIGNIFICANCE: Limited spare rows (~512). Approaching limit = replacement.",
         {"h":6,"w":8,"x":0,"y":y},
-        [tgt('gpu_correctable_remapped_rows{' + N + ', ' + GPU + '}',
-             '{{instance}} GPU{{gpu}}')],
+        [tgt('gpu_correctable_remapped_rows{' + EC + '}','{{entity}}')],
         axis="Remapped Rows"))
 
     panels.append(ts(
         "Uncorrectable Remapped Rows",
-        "gpu_uncorrectable_remapped_rows — > 0 = SCHEDULE REPLACEMENT.",
+        "WHY: Remapping could NOT fix the row — data at risk.\n\n"
+        "METRIC: gpu_uncorrectable_remapped_rows.\n"
+        "ACTION: > 0 = SCHEDULE GPU REPLACEMENT. Unreliable compute.",
         {"h":6,"w":8,"x":8,"y":y},
-        [tgt('gpu_uncorrectable_remapped_rows{' + N + ', ' + GPU + '}',
-             '{{instance}} GPU{{gpu}}')],
-        axis="Remapped Rows",
+        [tgt('gpu_uncorrectable_remapped_rows{' + EC + '}','{{entity}}')],
+        axis="Rows",
         overrides=[{"matcher":{"id":"byFrameRefID","options":"A"},"properties":[
             {"id":"color","value":{"fixedColor":C_FL,"mode":"fixed"}}]}]))
 
     panels.append(ts(
-        "Row Remap Failure",
-        "gpu_row_remap_failure — 1 = row remapping EXHAUSTED. IMMEDIATE REPLACEMENT.",
+        "Row Remap Failure Flag",
+        "WHY: Spare rows EXHAUSTED — no more auto-repair possible.\n\n"
+        "METRIC: gpu_row_remap_failure — 0/1 flag.\n"
+        "ACTION: == 1 → IMMEDIATE GPU REPLACEMENT. Cannot self-heal.",
         {"h":6,"w":8,"x":16,"y":y},
-        [tgt('gpu_row_remap_failure{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}}')],
+        [tgt('gpu_row_remap_failure{' + EC + '}','{{entity}}')],
         axis="Failure (0/1)",
         overrides=[{"matcher":{"id":"byFrameRefID","options":"A"},"properties":[
             {"id":"color","value":{"fixedColor":C_FL,"mode":"fixed"}}]}]))
     y += 6
 
     # ════════════════════════════════════════════════════════
-    # ROW: XID Error History
+    # ROW: GPU Temperature (Per-GPU)
     # ════════════════════════════════════════════════════════
-    panels.append(row("XID Error History", y)); y += 1
+    panels.append(row("GPU Temperature (per-GPU)", y)); y += 1
 
     panels.append(ts(
-        "XID Error Timeline",
-        "job_gpu_xid_error — Critical XIDs: 48 (ECC DBE), 63 (page retirement), "
-        "64 (row remap), 74 (NVLink), 79 (NVLink access), 92/94/95 (ECC).",
-        {"h":6,"w":24,"x":0,"y":y},
-        [tgt('job_gpu_xid_error{' + N + '}','{{instance}} GPU{{gpu}} XID={{xid}}')],
-        axis="XID Events"))
-    y += 6
-
-    # ════════════════════════════════════════════════════════
-    # ROW: GPU Temperature & Throttling
-    # ════════════════════════════════════════════════════════
-    panels.append(row("GPU Temperature & Throttling", y)); y += 1
-
-    panels.append(ts(
-        "GPU Core Temperature",
-        "gpu_temperature — B200 liquid-cooled max ~83°C, air-cooled ~90°C.",
-        {"h":6,"w":8,"x":0,"y":y},
-        [tgt('gpu_temperature{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}}')],
+        "GPU Core Temp (gpu0-gpu3)",
+        "WHY: Monitor GPU die temperature under load.\n\n"
+        "METRICS: gpu0_temperature .. gpu3_temperature.\n"
+        "THRESHOLDS: < 75°C = normal (liquid-cooled), > 83°C = throttle risk.",
+        {"h":6,"w":12,"x":0,"y":y},
+        [tgt(f'gpu{i}_temperature{{{EC}}}', f'{{{{entity}}}} GPU{i}') for i in range(4)],
         axis="Temperature", unit="celsius"))
 
     panels.append(ts(
-        "HBM Memory Temperature",
-        "gpu_hbm_memory_temperature — > 95°C warning, > 105°C critical.",
-        {"h":6,"w":8,"x":8,"y":y},
-        [tgt('gpu_hbm_memory_temperature{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}}')],
+        "GPU Core Temp (gpu4-gpu7)",
+        "WHY: All 8 GPUs must stay within thermal envelope.\n\n"
+        "METRICS: gpu4_temperature .. gpu7_temperature.",
+        {"h":6,"w":12,"x":12,"y":y},
+        [tgt(f'gpu{i}_temperature{{{EC}}}', f'{{{{entity}}}} GPU{i}') for i in range(4,8)],
         axis="Temperature", unit="celsius"))
-
-    panels.append(ts(
-        "Thermal Violation Duration",
-        "gpu_thermal_violation — > 0 = GPU clocks throttled. Sustained = cooling issue.",
-        {"h":6,"w":8,"x":16,"y":y},
-        [tgt('gpu_thermal_violation{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}}')],
-        axis="Violation (µs)",
-        overrides=[{"matcher":{"id":"byFrameRefID","options":"A"},"properties":[
-            {"id":"color","value":{"fixedColor":C_FL,"mode":"fixed"}}]}]))
     y += 6
 
     # ════════════════════════════════════════════════════════
-    # ROW: GPU Power Profile
+    # ROW: HBM Memory Temperature
     # ════════════════════════════════════════════════════════
-    panels.append(row("GPU Power Profile", y)); y += 1
+    panels.append(row("HBM Memory Temperature", y)); y += 1
 
     panels.append(ts(
-        "GPU Power Usage",
-        "gpu_power_usage — B200 TDP = 1000W. Sustained near TDP = normal under load.",
-        {"h":6,"w":8,"x":0,"y":y},
-        [tgt('gpu_power_usage{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}}')],
-        axis="Power", unit="watt"))
+        "HBM Temp (gpu0-gpu3)",
+        "WHY: HBM (High Bandwidth Memory) is thermally sensitive.\n\n"
+        "METRICS: gpu0_mem_temp .. gpu3_mem_temp.\n"
+        "THRESHOLDS: > 95°C = warning, > 105°C = CRITICAL (data corruption risk).",
+        {"h":6,"w":12,"x":0,"y":y},
+        [tgt(f'gpu{i}_mem_temp{{{EC}}}', f'{{{{entity}}}} GPU{i}') for i in range(4)],
+        axis="HBM Temp", unit="celsius"))
 
     panels.append(ts(
-        "Power Limit vs Usage",
-        "gpu_enforced_power_limit vs gpu_power_usage. Gap = headroom.",
-        {"h":6,"w":8,"x":8,"y":y},
-        [tgt('gpu_enforced_power_limit{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}} Limit'),
-         tgt('gpu_power_usage{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}} Usage')],
-        axis="Power", unit="watt"))
-
-    panels.append(ts(
-        "Power Violation Duration",
-        "gpu_power_violation — > 0 = GPU clocks throttled due to power cap.",
-        {"h":6,"w":8,"x":16,"y":y},
-        [tgt('gpu_power_violation{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}}')],
-        axis="Violation (µs)"))
+        "HBM Temp (gpu4-gpu7)",
+        "WHY: All 8 GPUs' HBM temperature must be monitored equally.\n\n"
+        "METRICS: gpu4_mem_temp .. gpu7_mem_temp.",
+        {"h":6,"w":12,"x":12,"y":y},
+        [tgt(f'gpu{i}_mem_temp{{{EC}}}', f'{{{{entity}}}} GPU{i}') for i in range(4,8)],
+        axis="HBM Temp", unit="celsius"))
     y += 6
 
     # ════════════════════════════════════════════════════════
-    # ROW: NVLink Per-GPU & NVSwitch
+    # ROW: GPU Power & Throttle
     # ════════════════════════════════════════════════════════
-    panels.append(row("NVLink Per-GPU & NVSwitch", y)); y += 1
+    panels.append(row("GPU Power & Throttle", y)); y += 1
 
     panels.append(ts(
-        "NVLink CRC Data Errors",
-        "gpu_nvlink_crc_data_errors — rising = NVLink cable/connector degradation.",
+        "Per-GPU Power Draw",
+        "WHY: Each B200 GPU has 1000W TDP. Track actual vs budget.\n\n"
+        "METRICS: gpu0_power .. gpu7_power — individual GPU wattage.\n"
+        "SIGNIFICANCE: Under-TDP during load = throttling. Near-TDP = healthy.",
+        {"h":6,"w":12,"x":0,"y":y},
+        [tgt(f'gpu{i}_power{{{EC}}}', f'{{{{entity}}}} GPU{i}') for i in range(8)],
+        axis="Power", unit="watt"))
+
+    panels.append(ts(
+        "GPU Throttle Events",
+        "WHY: Throttling = GPU forced to reduce clock speed. Performance loss.\n\n"
+        "METRICS: gpu0_throttle .. gpu7_throttle — 0 = no throttle.\n"
+        "ACTION: Sustained > 0 = check cooling (CDU flow), power supply.",
+        {"h":6,"w":12,"x":12,"y":y},
+        [tgt(f'gpu{i}_throttle{{{EC}}}', f'{{{{entity}}}} GPU{i}') for i in range(8)],
+        axis="Throttle"))
+    y += 6
+
+    # ════════════════════════════════════════════════════════
+    # ROW: GPU Clock & Performance State
+    # ════════════════════════════════════════════════════════
+    panels.append(row("GPU Clock & Performance State", y)); y += 1
+
+    panels.append(ts(
+        "GPU SM Clock Speed",
+        "WHY: SM clock determines GPU compute throughput.\n\n"
+        "METRICS: gpu0_clock .. gpu7_clock.\n"
+        "SIGNIFICANCE: Lower-than-expected during load = power/thermal throttling.",
+        {"h":6,"w":12,"x":0,"y":y},
+        [tgt(f'gpu{i}_clock{{{EC}}}', f'{{{{entity}}}} GPU{i}') for i in range(8)],
+        axis="Clock (MHz)"))
+
+    panels.append(ts(
+        "GPU Performance State",
+        "WHY: P-state shows GPU power mode: P0 = max, P8 = idle.\n\n"
+        "METRICS: gpu0_perfstate .. gpu7_perfstate.\n"
+        "SIGNIFICANCE: P0 during workload = healthy. Higher P-state = underperforming.",
+        {"h":6,"w":12,"x":12,"y":y},
+        [tgt(f'gpu{i}_perfstate{{{EC}}}', f'{{{{entity}}}} GPU{i}') for i in range(8)],
+        axis="PerfState"))
+    y += 6
+
+    # ════════════════════════════════════════════════════════
+    # ROW: NVLink Health & Utilization (gpu_nvlink_* metrics)
+    # ════════════════════════════════════════════════════════
+    panels.append(row("NVLink Health & Utilization", y)); y += 1
+
+    panels.append(ts(
+        "GPU NVLink CRC Data Errors",
+        "WHY: CRC errors = data corruption on NVLink cables.\n\n"
+        "METRIC: gpu_nvlink_crc_data_errors.\n"
+        "ACTION: Rising = cable/connector degrading. Reseat or replace NVLink cable.",
         {"h":6,"w":8,"x":0,"y":y},
-        [tgt('gpu_nvlink_crc_data_errors{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}}')],
+        [tgt('gpu_nvlink_crc_data_errors{' + EC + '}','{{entity}}')],
         axis="CRC Errors"))
 
     panels.append(ts(
-        "NVLink CRC Flit Errors",
-        "gpu_nvlink_crc_flit_errors — low-level link noise.",
+        "GPU NVLink CRC Flit Errors",
+        "WHY: Flit = smallest NVLink transfer unit. Flit errors = link noise.\n\n"
+        "METRIC: gpu_nvlink_crc_flit_errors.\n"
+        "SIGNIFICANCE: Usually lower severity than data errors, but monitor trend.",
         {"h":6,"w":8,"x":8,"y":y},
-        [tgt('gpu_nvlink_crc_flit_errors{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}}')],
+        [tgt('gpu_nvlink_crc_flit_errors{' + EC + '}','{{entity}}')],
         axis="Flit Errors"))
 
     panels.append(ts(
-        "NVSwitch Fatal / Non-Fatal",
-        "gpu_health_nvswitch_fatal / gpu_health_nvswitch_non_fatal — fatal != PASS = ESCALATE.",
+        "GPU Utilization",
+        "WHY: Track compute usage per entity.\n\n"
+        "METRIC: gpu_utilization — SM activity %.\n"
+        "TARGET: > 70% during active jobs.",
         {"h":6,"w":8,"x":16,"y":y},
-        [tgt('gpu_health_nvswitch_fatal{' + N + '}','{{instance}} Fatal'),
-         tgt('gpu_health_nvswitch_non_fatal{' + N + '}','{{instance}} Non-Fatal')],
-        axis="Health (0=PASS)"))
+        [tgt('gpu_utilization{' + EC + '}','{{entity}}')],
+        axis="Utilization %", unit="percent"))
     y += 6
 
     # ════════════════════════════════════════════════════════
-    # ROW: C2C Link & PCIe & Utilization
+    # ROW: Advanced GPU Diagnostics
     # ════════════════════════════════════════════════════════
-    panels.append(row("C2C Link, PCIe & Utilization", y)); y += 1
-
-    panels.append(ts(
-        "C2C Link Status",
-        "gpu_c2c_link_status / gpu_c2c_link_bandwidth — chip-to-chip connectivity.",
-        {"h":6,"w":8,"x":0,"y":y},
-        [tgt('gpu_c2c_link_status{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}} Status'),
-         tgt('gpu_c2c_link_bandwidth{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}} BW')],
-        axis="Status / BW"))
-
-    panels.append(ts(
-        "GPU Utilization Overview",
-        "gpu_utilization, gpu_mem_utilization — baseline performance tracking.",
-        {"h":6,"w":8,"x":8,"y":y},
-        [tgt('gpu_utilization{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}} Compute'),
-         tgt('gpu_mem_utilization{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}} Mem')],
-        axis="Utilization %", unit="percent"))
+    panels.append(row("Advanced GPU Diagnostics", y)); y += 1
 
     panels.append(ts(
         "GPU Fabric Status",
-        "gpu_fabric_status per GPU — GPU excluded from NVLink domain = reduced multi-GPU perf.",
-        {"h":6,"w":8,"x":16,"y":y},
-        [tgt('gpu_fabric_status{' + N + ', ' + GPU + '}','{{instance}} GPU{{gpu}}')],
-        axis="Fabric Status"))
+        "WHY: Fabric status shows if GPU is included in NVLink domain.\n\n"
+        "METRIC: GPU_fabric_status — 0 = in domain, > 0 = excluded.\n"
+        "ACTION: Excluded GPU = reduced multi-GPU performance. Check NVSwitch.",
+        {"h":6,"w":6,"x":0,"y":y},
+        [tgt('GPU_fabric_status{' + EC + '}','{{entity}}')],
+        axis="Status"))
+
+    panels.append(ts(
+        "Thermal Violation",
+        "WHY: GPU exceeded thermal limit — clock throttled to cool down.\n\n"
+        "METRIC: GPU_thermal_violation — counter of thermal throttle events.\n"
+        "ACTION: Frequent = check CDU/cooling flow, ambient temperature.",
+        {"h":6,"w":6,"x":6,"y":y},
+        [tgt('GPU_thermal_violation{' + EC + '}','{{entity}}')],
+        axis="Violations",
+        overrides=[{"matcher":{"id":"byFrameRefID","options":"A"},"properties":[
+            {"id":"color","value":{"fixedColor":C_FL,"mode":"fixed"}}]}]))
+
+    panels.append(ts(
+        "Board Limit Violation",
+        "WHY: Board-level power or thermal limit exceeded — entire baseboard issue.\n\n"
+        "METRIC: gpu_board_limit_violation.\n"
+        "SIGNIFICANCE: May indicate PSU degradation or chassis thermal issue.",
+        {"h":6,"w":6,"x":12,"y":y},
+        [tgt('gpu_board_limit_violation{' + EC + '}','{{entity}}')],
+        axis="Violations"))
+
+    panels.append(ts(
+        "Sync Boost & Reliability Violations",
+        "WHY: Sync boost ensures all GPUs run at same clock. Violations = asymmetry.\n\n"
+        "METRICS: GPU_sync_boost_violation + gpu_reliability_violation.\n"
+        "SIGNIFICANCE: Reliability violations = approaching hardware limit.",
+        {"h":6,"w":6,"x":18,"y":y},
+        [tgt('GPU_sync_boost_violation{' + EC + '}','{{entity}} SyncBoost'),
+         tgt('gpu_reliability_violation{' + EC + '}','{{entity}} Reliability')],
+        axis="Violations"))
     y += 6
 
-    # ── Build dashboard ──
     return wrap_dashboard(
         uid=UIDS["01"],
         title="BMaaS — 01 GPU Health & Diagnostics",
-        description="Per-GPU deep-dive: ECC errors, row remapping, XID errors, thermal/power, "
-                    "NVLink per-GPU, NVSwitch, C2C, PCIe, utilization. Hardware replacement signals.",
-        tags=["bmaas","gpu","health","diagnostics","ecc","xid","nvlink","b200","bcm11"],
+        description="Per-GPU deep-dive: DCGM health matrix, ECC SBE/DBE, row remapping, "
+                    "temperature (core+HBM), power/throttle, clock/perfstate, NVLink errors.",
+        tags=["bmaas","gpu","health","diagnostics","ecc","nvlink","b200","bcm11"],
         panels=panels,
-        templating=standard_templating(extra_vars=[gpu_var()]),
+        templating=standard_templating(),
         links=sub_dashboard_links()
     )
-
 
 if __name__ == "__main__":
     out = sys.argv[1] if len(sys.argv) > 1 else "dashboards/01-gpu-health-diagnostics.json"
@@ -279,5 +356,3 @@ if __name__ == "__main__":
     with open(out, "w") as f:
         json.dump(d, f, indent=4)
     print(f"Generated {out}: {len(d['panels'])} panels")
-    for p in d["panels"]:
-        print(f"  [{p.get('type',''):14s}] {p.get('title','')}")

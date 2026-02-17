@@ -3,6 +3,8 @@
 
 Generates all Grafana dashboard JSON files by invoking individual build modules.
 Usage: python3 generate_dashboards.py [--all | --dashboard 00 01 02 ...]
+
+v4: Only 5 dashboards (00-04). Dashboards 05 (burn-in) and 06 (SLA) deleted — merged into 00.
 """
 import json, os, sys
 
@@ -17,8 +19,6 @@ BUILDERS = {
     "02": ("build_02_infrastructure", "build_02", "02-infrastructure-hardware-health.json"),
     "03": ("build_03_network", "build_03", "03-network-fabric-monitoring.json"),
     "04": ("build_04_workload", "build_04", "04-workload-job-performance.json"),
-    "05": ("build_05_burnin", "build_05", "05-burnin-certification.json"),
-    "06": ("build_06_sla", "build_06", "06-sla-compliance-alerting.json"),
 }
 
 def generate(dashboard_ids=None):
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     if "--help" in sys.argv:
         print("Usage: python3 generate_dashboards.py [--all | --dashboard 00 01 02 ...]")
         print("  --all           Generate all dashboards (default)")
-        print("  --dashboard IDs Generate specific dashboards by ID (00-06)")
+        print("  --dashboard IDs Generate specific dashboards by ID (00-04)")
         sys.exit(0)
 
     if "--dashboard" in sys.argv:
@@ -77,6 +77,6 @@ if __name__ == "__main__":
     else:
         ids = None  # generate all available
 
-    print(f"BMaaS Monitoring Dashboard Suite — Generator")
+    print(f"BMaaS Monitoring Dashboard Suite — Generator (v4)")
     print(f"{'='*60}")
     generate(ids)

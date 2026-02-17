@@ -17,14 +17,13 @@
     "id": null,
     "uid": "bmaas-01-gpu-health",
     "title": "BMaaS \u2014 01 GPU Health & Diagnostics",
-    "description": "Per-GPU deep-dive: ECC errors, row remapping, XID errors, thermal/power, NVLink per-GPU, NVSwitch, C2C, PCIe, utilization. Hardware replacement signals.",
+    "description": "Per-GPU deep-dive: DCGM health matrix, ECC SBE/DBE, row remapping, temperature (core+HBM), power/throttle, clock/perfstate, NVLink errors.",
     "tags": [
         "bmaas",
         "gpu",
         "health",
         "diagnostics",
         "ecc",
-        "xid",
         "nvlink",
         "b200",
         "bcm11"
@@ -64,9 +63,12 @@
             {
                 "name": "datasource",
                 "type": "datasource",
-                "label": "Prometheus Data Source",
+                "label": "Data Source",
                 "query": "prometheus",
-                "current": {},
+                "current": {
+                    "text": "Mimir BCM Metrics",
+                    "value": "Mimir BCM Metrics"
+                },
                 "hide": 0,
                 "includeAll": false,
                 "multi": false,
@@ -88,9 +90,12 @@
                     "query": "label_values(up, cluster)",
                     "refId": "cl"
                 },
-                "current": {},
+                "current": {
+                    "text": "su56",
+                    "value": "su56"
+                },
                 "hide": 0,
-                "includeAll": true,
+                "includeAll": false,
                 "multi": false,
                 "options": [],
                 "refresh": 2,
@@ -101,47 +106,25 @@
             {
                 "name": "node",
                 "type": "query",
-                "label": "Node",
+                "label": "Node (DGX)",
                 "datasource": {
                     "type": "prometheus",
                     "uid": "${datasource}"
                 },
-                "definition": "label_values(up{cluster=~\"$cluster\"}, instance)",
+                "definition": "label_values({cluster=~\"$cluster\"}, entity)",
                 "query": {
-                    "query": "label_values(up{cluster=~\"$cluster\"}, instance)",
+                    "query": "label_values({cluster=~\"$cluster\"}, entity)",
                     "refId": "nd"
                 },
                 "current": {},
                 "hide": 0,
                 "includeAll": true,
                 "multi": true,
+                "allValue": ".*",
                 "options": [],
                 "refresh": 2,
-                "regex": "",
+                "regex": "/skt-dgx.*/",
                 "sort": 1,
-                "skipUrlSync": false
-            },
-            {
-                "name": "gpu_id",
-                "type": "query",
-                "label": "GPU ID",
-                "datasource": {
-                    "type": "prometheus",
-                    "uid": "${datasource}"
-                },
-                "definition": "label_values(gpu_utilization{node=~\"$node\"}, gpu)",
-                "query": {
-                    "query": "label_values(gpu_utilization{node=~\"$node\"}, gpu)",
-                    "refId": "gp"
-                },
-                "current": {},
-                "hide": 0,
-                "includeAll": true,
-                "multi": true,
-                "options": [],
-                "refresh": 2,
-                "regex": "",
-                "sort": 3,
                 "skipUrlSync": false
             }
         ]
@@ -162,8 +145,8 @@
         },
         {
             "id": 2,
-            "title": "GPU Health Matrix",
-            "description": "Per-node/GPU overall DCGM health status. Red = FAIL, Yellow = WARN, Green = PASS.",
+            "title": "GPU Health Matrix (per Node)",
+            "description": "WHY: Instantly visualize which nodes have GPU health issues.\n\nMETRIC: gpu_health_overall \u2014 DCGM aggregate health check.\n0 = PASS (green), > 0 = FAIL (red). Each row = one DGX node.\nSIGNIFICANCE: Failed nodes should NOT receive new workloads.\nACTION: Filter by specific node using the dropdown to drill down.",
             "type": "state-timeline",
             "datasource": {
                 "type": "prometheus",
@@ -263,15 +246,80 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "gpu_health_overall{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}}"
+                    "expr": "gpu_health_overall{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
                 }
             ]
         },
         {
             "id": 3,
-            "title": "\u26d4 GPUs Needing Replacement",
-            "description": "GPUs with DBE > 0, row remap failure, or uncorrectable remapped rows > 0. Any value > 0 = initiate RMA.",
+            "title": "GPUs per Entity",
+            "description": "WHY: Validate hardware config \u2014 B200 DGX should have 8 GPUs.\n\nMETRIC: gpu_count \u2014 GPUs detected by DCGM per entity.\nSIGNIFICANCE: < 8 = GPU not detected = hardware failure.\nACTION: Check GPU seating, PCIe link, DCGM logs.",
+            "type": "bargauge",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 6,
+                "x": 12,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#C04040",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 7
+                            },
+                            {
+                                "color": "#56A64B",
+                                "value": 8
+                            }
+                        ]
+                    },
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "horizontal",
+                "displayMode": "gradient",
+                "showUnfilled": true
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu_count{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 4,
+            "title": "Nodes Needing GPU RMA",
+            "description": "WHY: Proactive RMA tracking to minimize downtime.\n\nCRITERIA: gpu_ecc_dbe_agg > 0 (uncorrectable memory) OR gpu_row_remap_failure == 1 (HBM repair exhausted) OR gpu_uncorrectable_remapped_rows > 0.\n\nACTION: Any > 0 = open RMA ticket with NVIDIA.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -280,7 +328,7 @@
             "gridPos": {
                 "h": 4,
                 "w": 6,
-                "x": 12,
+                "x": 18,
                 "y": 1
             },
             "fieldConfig": {
@@ -314,7 +362,7 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
+                "textMode": "value",
                 "colorMode": "background",
                 "graphMode": "none",
                 "justifyMode": "center"
@@ -326,80 +374,16 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "count((gpu_ecc_dbe_agg{node=~\"$node\"} > 0) or (gpu_row_remap_failure{node=~\"$node\"} == 1) or (gpu_uncorrectable_remapped_rows{node=~\"$node\"} > 0)) or vector(0)",
-                    "legendFormat": "",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 4,
-            "title": "\u26a0\ufe0f GPUs Approaching Limit",
-            "description": "GPUs with correctable remapped rows > 256 (approaching 512 limit).",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 18,
-                "y": 1
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "none",
-                    "decimals": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#56A64B",
-                                "value": null
-                            },
-                            {
-                                "color": "#E0A939",
-                                "value": 1
-                            }
-                        ]
-                    },
-                    "mappings": [],
-                    "noValue": "N/A"
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "count(gpu_correctable_remapped_rows{node=~\"$node\"} > 256) or vector(0)",
-                    "legendFormat": "",
+                    "expr": "count((gpu_ecc_dbe_agg{entity=~\"$node\",cluster=~\"$cluster\"} > 0) or (gpu_row_remap_failure{entity=~\"$node\",cluster=~\"$cluster\"} == 1) or (gpu_uncorrectable_remapped_rows{entity=~\"$node\",cluster=~\"$cluster\"} > 0)) or vector(0)",
+                    "legendFormat": "RMA Candidates",
                     "instant": true
                 }
             ]
         },
         {
             "id": 5,
-            "title": "Driver",
-            "description": "DCGM Driver health check.",
+            "title": "Memory",
+            "description": "WHY: Detects HBM memory faults \u2014 ECC errors, row remapping issues.\n0 = OK, > 0 = memory degrading.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -448,9 +432,11 @@
                             }
                         },
                         {
-                            "type": "value",
+                            "type": "range",
                             "options": {
-                                "1": {
+                                "from": 1,
+                                "to": 999,
+                                "result": {
                                     "text": "FAIL",
                                     "color": "#C04040"
                                 }
@@ -470,7 +456,7 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
+                "textMode": "value",
                 "colorMode": "background",
                 "graphMode": "none",
                 "justifyMode": "center"
@@ -482,7 +468,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "max(gpu_health_driver{node=~\"$node\", gpu=~\"$gpu_id\"}}) or vector(-1)",
+                    "expr": "max(gpu_health_mem{entity=~\"$node\",cluster=~\"$cluster\"}) or vector(-1)",
                     "legendFormat": "",
                     "instant": true
                 }
@@ -490,8 +476,8 @@
         },
         {
             "id": 6,
-            "title": "Memory",
-            "description": "DCGM Memory health check.",
+            "title": "NVLink",
+            "description": "WHY: NVLink enables 900GB/s GPU-to-GPU communication.\n0 = OK, > 0 = link errors detected.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -540,9 +526,11 @@
                             }
                         },
                         {
-                            "type": "value",
+                            "type": "range",
                             "options": {
-                                "1": {
+                                "from": 1,
+                                "to": 999,
+                                "result": {
                                     "text": "FAIL",
                                     "color": "#C04040"
                                 }
@@ -562,7 +550,7 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
+                "textMode": "value",
                 "colorMode": "background",
                 "graphMode": "none",
                 "justifyMode": "center"
@@ -574,7 +562,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "max(gpu_health_mem{node=~\"$node\", gpu=~\"$gpu_id\"}}) or vector(-1)",
+                    "expr": "max(gpu_health_nvlink{entity=~\"$node\",cluster=~\"$cluster\"}) or vector(-1)",
                     "legendFormat": "",
                     "instant": true
                 }
@@ -582,8 +570,8 @@
         },
         {
             "id": 7,
-            "title": "NVLink",
-            "description": "DCGM NVLink health check.",
+            "title": "PCIe",
+            "description": "WHY: PCIe connects GPU to CPU for data transfer.\n0 = OK, > 0 = bus errors.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -632,9 +620,11 @@
                             }
                         },
                         {
-                            "type": "value",
+                            "type": "range",
                             "options": {
-                                "1": {
+                                "from": 1,
+                                "to": 999,
+                                "result": {
                                     "text": "FAIL",
                                     "color": "#C04040"
                                 }
@@ -654,7 +644,7 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
+                "textMode": "value",
                 "colorMode": "background",
                 "graphMode": "none",
                 "justifyMode": "center"
@@ -666,7 +656,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "max(gpu_health_nvlink{node=~\"$node\", gpu=~\"$gpu_id\"}}) or vector(-1)",
+                    "expr": "max(gpu_health_pcie{entity=~\"$node\",cluster=~\"$cluster\"}) or vector(-1)",
                     "legendFormat": "",
                     "instant": true
                 }
@@ -674,8 +664,8 @@
         },
         {
             "id": 8,
-            "title": "PCIe",
-            "description": "DCGM PCIe health check.",
+            "title": "SM",
+            "description": "WHY: Streaming Multiprocessors are the GPU compute units.\n0 = OK, > 0 = compute errors.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -724,9 +714,11 @@
                             }
                         },
                         {
-                            "type": "value",
+                            "type": "range",
                             "options": {
-                                "1": {
+                                "from": 1,
+                                "to": 999,
+                                "result": {
                                     "text": "FAIL",
                                     "color": "#C04040"
                                 }
@@ -746,7 +738,7 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
+                "textMode": "value",
                 "colorMode": "background",
                 "graphMode": "none",
                 "justifyMode": "center"
@@ -758,7 +750,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "max(gpu_health_pcie{node=~\"$node\", gpu=~\"$gpu_id\"}}) or vector(-1)",
+                    "expr": "max(gpu_health_sm{entity=~\"$node\",cluster=~\"$cluster\"}) or vector(-1)",
                     "legendFormat": "",
                     "instant": true
                 }
@@ -766,8 +758,8 @@
         },
         {
             "id": 9,
-            "title": "SM",
-            "description": "DCGM SM health check.",
+            "title": "Thermal",
+            "description": "WHY: GPU operating within thermal limits.\n0 = OK, > 0 = overheating.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -816,9 +808,11 @@
                             }
                         },
                         {
-                            "type": "value",
+                            "type": "range",
                             "options": {
-                                "1": {
+                                "from": 1,
+                                "to": 999,
+                                "result": {
                                     "text": "FAIL",
                                     "color": "#C04040"
                                 }
@@ -838,7 +832,7 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
+                "textMode": "value",
                 "colorMode": "background",
                 "graphMode": "none",
                 "justifyMode": "center"
@@ -850,7 +844,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "max(gpu_health_sm{node=~\"$node\", gpu=~\"$gpu_id\"}}) or vector(-1)",
+                    "expr": "max(gpu_health_thermal{entity=~\"$node\",cluster=~\"$cluster\"}) or vector(-1)",
                     "legendFormat": "",
                     "instant": true
                 }
@@ -858,8 +852,8 @@
         },
         {
             "id": 10,
-            "title": "Thermal",
-            "description": "DCGM Thermal health check.",
+            "title": "Overall",
+            "description": "WHY: DCGM composite health \u2014 OR of all sub-checks.\n0 = ALL healthy, > 0 = investigate.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -908,9 +902,11 @@
                             }
                         },
                         {
-                            "type": "value",
+                            "type": "range",
                             "options": {
-                                "1": {
+                                "from": 1,
+                                "to": 999,
+                                "result": {
                                     "text": "FAIL",
                                     "color": "#C04040"
                                 }
@@ -930,7 +926,7 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
+                "textMode": "value",
                 "colorMode": "background",
                 "graphMode": "none",
                 "justifyMode": "center"
@@ -942,7 +938,7 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "max(gpu_health_thermal{node=~\"$node\", gpu=~\"$gpu_id\"}}) or vector(-1)",
+                    "expr": "max(gpu_health_overall{entity=~\"$node\",cluster=~\"$cluster\"}) or vector(-1)",
                     "legendFormat": "",
                     "instant": true
                 }
@@ -964,7 +960,7 @@
         {
             "id": 12,
             "title": "ECC Single-Bit Errors (Aggregate)",
-            "description": "gpu_ecc_sbe_agg \u2014 correctable errors. Rising trend = early memory degradation.",
+            "description": "WHY: SBE are correctable \u2014 the GPU auto-corrects them.\nRising trend = HBM memory slowly degrading.\n\nMETRIC: gpu_ecc_sbe_agg \u2014 lifetime correctable error count.\nACTION: Monitor rate. Rapid increase \u2192 schedule maintenance window.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1017,7 +1013,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -1031,15 +1029,15 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "gpu_ecc_sbe_agg{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}}"
+                    "expr": "gpu_ecc_sbe_agg{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
                 }
             ]
         },
         {
             "id": 13,
             "title": "ECC Double-Bit Errors (Aggregate)",
-            "description": "gpu_ecc_dbe_agg \u2014 UNCORRECTABLE errors. > 0 = IMMEDIATE REPLACEMENT.",
+            "description": "WHY: DBE are UNCORRECTABLE \u2014 data corruption occurred.\n\nMETRIC: gpu_ecc_dbe_agg \u2014 lifetime uncorrectable error count.\nACTION: > 0 = IMMEDIATE GPU REPLACEMENT. Workload results unreliable.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1092,7 +1090,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -1106,15 +1106,15 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "gpu_ecc_dbe_agg{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}}"
+                    "expr": "gpu_ecc_dbe_agg{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
                 }
             ]
         },
         {
             "id": 14,
-            "title": "ECC Volatile (Since Reboot)",
-            "description": "gpu_ecc_sbe_vol / gpu_ecc_dbe_vol \u2014 errors since last GPU reset.",
+            "title": "ECC Volatile (Since Last Reset)",
+            "description": "WHY: Volatile counters reset on GPU reset \u2014 shows RECENT errors.\n\nMETRICS: gpu_ecc_sbe_vol + gpu_ecc_dbe_vol.\nSIGNIFICANCE: Helps determine if errors are ongoing or historical.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1151,7 +1151,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -1165,8 +1167,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "gpu_ecc_sbe_vol{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}} SBE"
+                    "expr": "gpu_ecc_sbe_vol{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} SBE"
                 },
                 {
                     "refId": "B",
@@ -1174,8 +1176,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "gpu_ecc_dbe_vol{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}} DBE"
+                    "expr": "gpu_ecc_dbe_vol{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} DBE"
                 }
             ]
         },
@@ -1195,7 +1197,7 @@
         {
             "id": 16,
             "title": "Correctable Remapped Rows",
-            "description": "gpu_correctable_remapped_rows \u2014 tracks HBM bank repairs. Limit ~512.",
+            "description": "WHY: HBM memory auto-repairs bad rows by remapping to spares.\n\nMETRIC: gpu_correctable_remapped_rows \u2014 how many rows were repaired.\nSIGNIFICANCE: Limited spare rows (~512). Approaching limit = replacement.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1232,7 +1234,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -1246,15 +1250,15 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "gpu_correctable_remapped_rows{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}}"
+                    "expr": "gpu_correctable_remapped_rows{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
                 }
             ]
         },
         {
             "id": 17,
             "title": "Uncorrectable Remapped Rows",
-            "description": "gpu_uncorrectable_remapped_rows \u2014 > 0 = SCHEDULE REPLACEMENT.",
+            "description": "WHY: Remapping could NOT fix the row \u2014 data at risk.\n\nMETRIC: gpu_uncorrectable_remapped_rows.\nACTION: > 0 = SCHEDULE GPU REPLACEMENT. Unreliable compute.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1273,7 +1277,7 @@
                         "lineWidth": 2,
                         "fillOpacity": 10,
                         "gradientMode": "none",
-                        "axisLabel": "Remapped Rows",
+                        "axisLabel": "Rows",
                         "drawStyle": "line",
                         "pointSize": 4,
                         "showPoints": "never",
@@ -1307,7 +1311,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -1321,15 +1327,15 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "gpu_uncorrectable_remapped_rows{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}}"
+                    "expr": "gpu_uncorrectable_remapped_rows{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
                 }
             ]
         },
         {
             "id": 18,
-            "title": "Row Remap Failure",
-            "description": "gpu_row_remap_failure \u2014 1 = row remapping EXHAUSTED. IMMEDIATE REPLACEMENT.",
+            "title": "Row Remap Failure Flag",
+            "description": "WHY: Spare rows EXHAUSTED \u2014 no more auto-repair possible.\n\nMETRIC: gpu_row_remap_failure \u2014 0/1 flag.\nACTION: == 1 \u2192 IMMEDIATE GPU REPLACEMENT. Cannot self-heal.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1382,7 +1388,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -1396,14 +1404,14 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "gpu_row_remap_failure{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}}"
+                    "expr": "gpu_row_remap_failure{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
                 }
             ]
         },
         {
             "type": "row",
-            "title": "XID Error History",
+            "title": "GPU Temperature (per-GPU)",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
@@ -1416,8 +1424,8 @@
         },
         {
             "id": 20,
-            "title": "XID Error Timeline",
-            "description": "job_gpu_xid_error \u2014 Critical XIDs: 48 (ECC DBE), 63 (page retirement), 64 (row remap), 74 (NVLink), 79 (NVLink access), 92/94/95 (ECC).",
+            "title": "GPU Core Temp (gpu0-gpu3)",
+            "description": "WHY: Monitor GPU die temperature under load.\n\nMETRICS: gpu0_temperature .. gpu3_temperature.\nTHRESHOLDS: < 75\u00b0C = normal (liquid-cooled), > 83\u00b0C = throttle risk.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1425,81 +1433,9 @@
             },
             "gridPos": {
                 "h": 6,
-                "w": 24,
+                "w": 12,
                 "x": 0,
                 "y": 24
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "XID Events",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "job_gpu_xid_error{node=~\"$node\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}} XID={{xid}}"
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "GPU Temperature & Throttling",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 30
-            },
-            "id": 21,
-            "panels": []
-        },
-        {
-            "id": 22,
-            "title": "GPU Core Temperature",
-            "description": "gpu_temperature \u2014 B200 liquid-cooled max ~83\u00b0C, air-cooled ~90\u00b0C.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 8,
-                "x": 0,
-                "y": 31
             },
             "fieldConfig": {
                 "defaults": {
@@ -1526,7 +1462,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -1540,15 +1478,915 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "gpu_temperature{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}}"
+                    "expr": "gpu0_temperature{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU0"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu1_temperature{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU1"
+                },
+                {
+                    "refId": "C",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu2_temperature{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU2"
+                },
+                {
+                    "refId": "D",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu3_temperature{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU3"
                 }
             ]
         },
         {
-            "id": 23,
+            "id": 21,
+            "title": "GPU Core Temp (gpu4-gpu7)",
+            "description": "WHY: All 8 GPUs must stay within thermal envelope.\n\nMETRICS: gpu4_temperature .. gpu7_temperature.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 12,
+                "y": 24
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "celsius",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Temperature",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu4_temperature{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU4"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu5_temperature{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU5"
+                },
+                {
+                    "refId": "C",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu6_temperature{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU6"
+                },
+                {
+                    "refId": "D",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu7_temperature{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU7"
+                }
+            ]
+        },
+        {
+            "type": "row",
             "title": "HBM Memory Temperature",
-            "description": "gpu_hbm_memory_temperature \u2014 > 95\u00b0C warning, > 105\u00b0C critical.",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 30
+            },
+            "id": 22,
+            "panels": []
+        },
+        {
+            "id": 23,
+            "title": "HBM Temp (gpu0-gpu3)",
+            "description": "WHY: HBM (High Bandwidth Memory) is thermally sensitive.\n\nMETRICS: gpu0_mem_temp .. gpu3_mem_temp.\nTHRESHOLDS: > 95\u00b0C = warning, > 105\u00b0C = CRITICAL (data corruption risk).",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 0,
+                "y": 31
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "celsius",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "HBM Temp",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu0_mem_temp{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU0"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu1_mem_temp{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU1"
+                },
+                {
+                    "refId": "C",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu2_mem_temp{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU2"
+                },
+                {
+                    "refId": "D",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu3_mem_temp{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU3"
+                }
+            ]
+        },
+        {
+            "id": 24,
+            "title": "HBM Temp (gpu4-gpu7)",
+            "description": "WHY: All 8 GPUs' HBM temperature must be monitored equally.\n\nMETRICS: gpu4_mem_temp .. gpu7_mem_temp.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 12,
+                "y": 31
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "celsius",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "HBM Temp",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu4_mem_temp{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU4"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu5_mem_temp{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU5"
+                },
+                {
+                    "refId": "C",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu6_mem_temp{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU6"
+                },
+                {
+                    "refId": "D",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu7_mem_temp{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU7"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "GPU Power & Throttle",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 37
+            },
+            "id": 25,
+            "panels": []
+        },
+        {
+            "id": 26,
+            "title": "Per-GPU Power Draw",
+            "description": "WHY: Each B200 GPU has 1000W TDP. Track actual vs budget.\n\nMETRICS: gpu0_power .. gpu7_power \u2014 individual GPU wattage.\nSIGNIFICANCE: Under-TDP during load = throttling. Near-TDP = healthy.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 0,
+                "y": 38
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "watt",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Power",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu0_power{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU0"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu1_power{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU1"
+                },
+                {
+                    "refId": "C",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu2_power{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU2"
+                },
+                {
+                    "refId": "D",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu3_power{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU3"
+                },
+                {
+                    "refId": "E",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu4_power{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU4"
+                },
+                {
+                    "refId": "F",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu5_power{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU5"
+                },
+                {
+                    "refId": "G",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu6_power{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU6"
+                },
+                {
+                    "refId": "H",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu7_power{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU7"
+                }
+            ]
+        },
+        {
+            "id": 27,
+            "title": "GPU Throttle Events",
+            "description": "WHY: Throttling = GPU forced to reduce clock speed. Performance loss.\n\nMETRICS: gpu0_throttle .. gpu7_throttle \u2014 0 = no throttle.\nACTION: Sustained > 0 = check cooling (CDU flow), power supply.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 12,
+                "y": 38
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Throttle",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu0_throttle{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU0"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu1_throttle{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU1"
+                },
+                {
+                    "refId": "C",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu2_throttle{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU2"
+                },
+                {
+                    "refId": "D",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu3_throttle{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU3"
+                },
+                {
+                    "refId": "E",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu4_throttle{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU4"
+                },
+                {
+                    "refId": "F",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu5_throttle{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU5"
+                },
+                {
+                    "refId": "G",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu6_throttle{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU6"
+                },
+                {
+                    "refId": "H",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu7_throttle{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU7"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "GPU Clock & Performance State",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 44
+            },
+            "id": 28,
+            "panels": []
+        },
+        {
+            "id": 29,
+            "title": "GPU SM Clock Speed",
+            "description": "WHY: SM clock determines GPU compute throughput.\n\nMETRICS: gpu0_clock .. gpu7_clock.\nSIGNIFICANCE: Lower-than-expected during load = power/thermal throttling.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 0,
+                "y": 45
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Clock (MHz)",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu0_clock{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU0"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu1_clock{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU1"
+                },
+                {
+                    "refId": "C",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu2_clock{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU2"
+                },
+                {
+                    "refId": "D",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu3_clock{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU3"
+                },
+                {
+                    "refId": "E",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu4_clock{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU4"
+                },
+                {
+                    "refId": "F",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu5_clock{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU5"
+                },
+                {
+                    "refId": "G",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu6_clock{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU6"
+                },
+                {
+                    "refId": "H",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu7_clock{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU7"
+                }
+            ]
+        },
+        {
+            "id": 30,
+            "title": "GPU Performance State",
+            "description": "WHY: P-state shows GPU power mode: P0 = max, P8 = idle.\n\nMETRICS: gpu0_perfstate .. gpu7_perfstate.\nSIGNIFICANCE: P0 during workload = healthy. Higher P-state = underperforming.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 12,
+                "y": 45
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "PerfState",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu0_perfstate{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU0"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu1_perfstate{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU1"
+                },
+                {
+                    "refId": "C",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu2_perfstate{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU2"
+                },
+                {
+                    "refId": "D",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu3_perfstate{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU3"
+                },
+                {
+                    "refId": "E",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu4_perfstate{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU4"
+                },
+                {
+                    "refId": "F",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu5_perfstate{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU5"
+                },
+                {
+                    "refId": "G",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu6_perfstate{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU6"
+                },
+                {
+                    "refId": "H",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu7_perfstate{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} GPU7"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "NVLink Health & Utilization",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 51
+            },
+            "id": 31,
+            "panels": []
+        },
+        {
+            "id": 32,
+            "title": "GPU NVLink CRC Data Errors",
+            "description": "WHY: CRC errors = data corruption on NVLink cables.\n\nMETRIC: gpu_nvlink_crc_data_errors.\nACTION: Rising = cable/connector degrading. Reseat or replace NVLink cable.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 0,
+                "y": 52
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "CRC Errors",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu_nvlink_crc_data_errors{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
+                }
+            ]
+        },
+        {
+            "id": 33,
+            "title": "GPU NVLink CRC Flit Errors",
+            "description": "WHY: Flit = smallest NVLink transfer unit. Flit errors = link noise.\n\nMETRIC: gpu_nvlink_crc_flit_errors.\nSIGNIFICANCE: Usually lower severity than data errors, but monitor trend.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1558,16 +2396,16 @@
                 "h": 6,
                 "w": 8,
                 "x": 8,
-                "y": 31
+                "y": 52
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "celsius",
+                    "unit": "short",
                     "custom": {
                         "lineWidth": 2,
                         "fillOpacity": 10,
                         "gradientMode": "none",
-                        "axisLabel": "Temperature",
+                        "axisLabel": "Flit Errors",
                         "drawStyle": "line",
                         "pointSize": 4,
                         "showPoints": "never",
@@ -1585,7 +2423,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -1599,15 +2439,15 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "gpu_hbm_memory_temperature{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}}"
+                    "expr": "gpu_nvlink_crc_flit_errors{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
                 }
             ]
         },
         {
-            "id": 24,
-            "title": "Thermal Violation Duration",
-            "description": "gpu_thermal_violation \u2014 > 0 = GPU clocks throttled. Sustained = cooling issue.",
+            "id": 34,
+            "title": "GPU Utilization",
+            "description": "WHY: Track compute usage per entity.\n\nMETRIC: gpu_utilization \u2014 SM activity %.\nTARGET: > 70% during active jobs.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1617,7 +2457,81 @@
                 "h": 6,
                 "w": 8,
                 "x": 16,
-                "y": 31
+                "y": 52
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percent",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Utilization %",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu_utilization{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "Advanced GPU Diagnostics",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 58
+            },
+            "id": 35,
+            "panels": []
+        },
+        {
+            "id": 36,
+            "title": "GPU Fabric Status",
+            "description": "WHY: Fabric status shows if GPU is included in NVLink domain.\n\nMETRIC: GPU_fabric_status \u2014 0 = in domain, > 0 = excluded.\nACTION: Excluded GPU = reduced multi-GPU performance. Check NVSwitch.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 0,
+                "y": 59
             },
             "fieldConfig": {
                 "defaults": {
@@ -1626,7 +2540,68 @@
                         "lineWidth": 2,
                         "fillOpacity": 10,
                         "gradientMode": "none",
-                        "axisLabel": "Violation (\u00b5s)",
+                        "axisLabel": "Status",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "GPU_fabric_status{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
+                }
+            ]
+        },
+        {
+            "id": 37,
+            "title": "Thermal Violation",
+            "description": "WHY: GPU exceeded thermal limit \u2014 clock throttled to cool down.\n\nMETRIC: GPU_thermal_violation \u2014 counter of thermal throttle events.\nACTION: Frequent = check CDU/cooling flow, ambient temperature.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 6,
+                "x": 6,
+                "y": 59
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Violations",
                         "drawStyle": "line",
                         "pointSize": 4,
                         "showPoints": "never",
@@ -1660,7 +2635,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -1674,28 +2651,15 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "gpu_thermal_violation{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}}"
+                    "expr": "GPU_thermal_violation{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
                 }
             ]
         },
         {
-            "type": "row",
-            "title": "GPU Power Profile",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 37
-            },
-            "id": 25,
-            "panels": []
-        },
-        {
-            "id": 26,
-            "title": "GPU Power Usage",
-            "description": "gpu_power_usage \u2014 B200 TDP = 1000W. Sustained near TDP = normal under load.",
+            "id": 38,
+            "title": "Board Limit Violation",
+            "description": "WHY: Board-level power or thermal limit exceeded \u2014 entire baseboard issue.\n\nMETRIC: gpu_board_limit_violation.\nSIGNIFICANCE: May indicate PSU degradation or chassis thermal issue.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1703,18 +2667,18 @@
             },
             "gridPos": {
                 "h": 6,
-                "w": 8,
-                "x": 0,
-                "y": 38
+                "w": 6,
+                "x": 12,
+                "y": 59
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "watt",
+                    "unit": "short",
                     "custom": {
                         "lineWidth": 2,
                         "fillOpacity": 10,
                         "gradientMode": "none",
-                        "axisLabel": "Power",
+                        "axisLabel": "Violations",
                         "drawStyle": "line",
                         "pointSize": 4,
                         "showPoints": "never",
@@ -1732,7 +2696,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -1746,15 +2712,15 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "gpu_power_usage{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}}"
+                    "expr": "gpu_board_limit_violation{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
                 }
             ]
         },
         {
-            "id": 27,
-            "title": "Power Limit vs Usage",
-            "description": "gpu_enforced_power_limit vs gpu_power_usage. Gap = headroom.",
+            "id": 39,
+            "title": "Sync Boost & Reliability Violations",
+            "description": "WHY: Sync boost ensures all GPUs run at same clock. Violations = asymmetry.\n\nMETRICS: GPU_sync_boost_violation + gpu_reliability_violation.\nSIGNIFICANCE: Reliability violations = approaching hardware limit.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1762,18 +2728,18 @@
             },
             "gridPos": {
                 "h": 6,
-                "w": 8,
-                "x": 8,
-                "y": 38
+                "w": 6,
+                "x": 18,
+                "y": 59
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "watt",
+                    "unit": "short",
                     "custom": {
                         "lineWidth": 2,
                         "fillOpacity": 10,
                         "gradientMode": "none",
-                        "axisLabel": "Power",
+                        "axisLabel": "Violations",
                         "drawStyle": "line",
                         "pointSize": 4,
                         "showPoints": "never",
@@ -1791,7 +2757,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -1805,8 +2773,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "gpu_enforced_power_limit{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}} Limit"
+                    "expr": "GPU_sync_boost_violation{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} SyncBoost"
                 },
                 {
                     "refId": "B",
@@ -1814,474 +2782,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "gpu_power_usage{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}} Usage"
-                }
-            ]
-        },
-        {
-            "id": 28,
-            "title": "Power Violation Duration",
-            "description": "gpu_power_violation \u2014 > 0 = GPU clocks throttled due to power cap.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 8,
-                "x": 16,
-                "y": 38
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Violation (\u00b5s)",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "gpu_power_violation{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}}"
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "NVLink Per-GPU & NVSwitch",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 44
-            },
-            "id": 29,
-            "panels": []
-        },
-        {
-            "id": 30,
-            "title": "NVLink CRC Data Errors",
-            "description": "gpu_nvlink_crc_data_errors \u2014 rising = NVLink cable/connector degradation.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 8,
-                "x": 0,
-                "y": 45
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "CRC Errors",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "gpu_nvlink_crc_data_errors{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}}"
-                }
-            ]
-        },
-        {
-            "id": 31,
-            "title": "NVLink CRC Flit Errors",
-            "description": "gpu_nvlink_crc_flit_errors \u2014 low-level link noise.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 8,
-                "x": 8,
-                "y": 45
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Flit Errors",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "gpu_nvlink_crc_flit_errors{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}}"
-                }
-            ]
-        },
-        {
-            "id": 32,
-            "title": "NVSwitch Fatal / Non-Fatal",
-            "description": "gpu_health_nvswitch_fatal / gpu_health_nvswitch_non_fatal \u2014 fatal != PASS = ESCALATE.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 8,
-                "x": 16,
-                "y": 45
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Health (0=PASS)",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "gpu_health_nvswitch_fatal{node=~\"$node\"}",
-                    "legendFormat": "{{instance}} Fatal"
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "gpu_health_nvswitch_non_fatal{node=~\"$node\"}",
-                    "legendFormat": "{{instance}} Non-Fatal"
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "C2C Link, PCIe & Utilization",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 51
-            },
-            "id": 33,
-            "panels": []
-        },
-        {
-            "id": 34,
-            "title": "C2C Link Status",
-            "description": "gpu_c2c_link_status / gpu_c2c_link_bandwidth \u2014 chip-to-chip connectivity.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 8,
-                "x": 0,
-                "y": 52
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Status / BW",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "gpu_c2c_link_status{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}} Status"
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "gpu_c2c_link_bandwidth{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}} BW"
-                }
-            ]
-        },
-        {
-            "id": 35,
-            "title": "GPU Utilization Overview",
-            "description": "gpu_utilization, gpu_mem_utilization \u2014 baseline performance tracking.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 8,
-                "x": 8,
-                "y": 52
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "percent",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Utilization %",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "gpu_utilization{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}} Compute"
-                },
-                {
-                    "refId": "B",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "gpu_mem_utilization{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}} Mem"
-                }
-            ]
-        },
-        {
-            "id": 36,
-            "title": "GPU Fabric Status",
-            "description": "gpu_fabric_status per GPU \u2014 GPU excluded from NVLink domain = reduced multi-GPU perf.",
-            "type": "timeseries",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 8,
-                "x": 16,
-                "y": 52
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "axisLabel": "Fabric Status",
-                        "drawStyle": "line",
-                        "pointSize": 4,
-                        "showPoints": "never",
-                        "spanNulls": true
-                    }
-                },
-                "overrides": []
-            },
-            "options": {
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "min",
-                        "max",
-                        "mean",
-                        "lastNotNull"
-                    ]
-                },
-                "tooltip": {
-                    "mode": "multi",
-                    "sort": "desc"
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "gpu_fabric_status{node=~\"$node\", gpu=~\"$gpu_id\"}",
-                    "legendFormat": "{{instance}} GPU{{gpu}}"
+                    "expr": "gpu_reliability_violation{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}} Reliability"
                 }
             ]
         }
@@ -2320,20 +2822,6 @@
             "type": "link",
             "icon": "dashboard",
             "url": "/d/bmaas-04-workload-perf?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
-            "targetBlank": false
-        },
-        {
-            "title": "05 Burn-in & Certification",
-            "type": "link",
-            "icon": "dashboard",
-            "url": "/d/bmaas-05-burnin-cert?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
-            "targetBlank": false
-        },
-        {
-            "title": "06 SLA Compliance",
-            "type": "link",
-            "icon": "dashboard",
-            "url": "/d/bmaas-06-sla-compliance?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
             "targetBlank": false
         }
     ]

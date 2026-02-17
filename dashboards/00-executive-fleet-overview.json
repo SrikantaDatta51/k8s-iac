@@ -17,7 +17,7 @@
     "id": null,
     "uid": "bmaas-00-fleet-overview",
     "title": "BMaaS \u2014 00 Executive Fleet Overview",
-    "description": "Single-pane-of-glass for BMaaS fleet health. GPU status, NVLink domains, power/cooling, SLA uptime, and nodes requiring attention.",
+    "description": "Multi-component fleet health score, node status, GPU-focused panels, power per entity, NVLink health, SLA targets, license tracking, GPU utilization, ECC errors, and RMA priority table.",
     "tags": [
         "bmaas",
         "fleet",
@@ -63,9 +63,12 @@
             {
                 "name": "datasource",
                 "type": "datasource",
-                "label": "Prometheus Data Source",
+                "label": "Data Source",
                 "query": "prometheus",
-                "current": {},
+                "current": {
+                    "text": "Mimir BCM Metrics",
+                    "value": "Mimir BCM Metrics"
+                },
                 "hide": 0,
                 "includeAll": false,
                 "multi": false,
@@ -87,9 +90,12 @@
                     "query": "label_values(up, cluster)",
                     "refId": "cl"
                 },
-                "current": {},
+                "current": {
+                    "text": "su56",
+                    "value": "su56"
+                },
                 "hide": 0,
-                "includeAll": true,
+                "includeAll": false,
                 "multi": false,
                 "options": [],
                 "refresh": 2,
@@ -100,23 +106,24 @@
             {
                 "name": "node",
                 "type": "query",
-                "label": "Node",
+                "label": "Node (DGX)",
                 "datasource": {
                     "type": "prometheus",
                     "uid": "${datasource}"
                 },
-                "definition": "label_values(up{cluster=~\"$cluster\"}, instance)",
+                "definition": "label_values({cluster=~\"$cluster\"}, entity)",
                 "query": {
-                    "query": "label_values(up{cluster=~\"$cluster\"}, instance)",
+                    "query": "label_values({cluster=~\"$cluster\"}, entity)",
                     "refId": "nd"
                 },
                 "current": {},
                 "hide": 0,
                 "includeAll": true,
                 "multi": true,
+                "allValue": ".*",
                 "options": [],
                 "refresh": 2,
-                "regex": "",
+                "regex": "/skt-dgx.*/",
                 "sort": 1,
                 "skipUrlSync": false
             }
@@ -125,7 +132,7 @@
     "panels": [
         {
             "type": "row",
-            "title": "Fleet Health at a Glance",
+            "title": "Fleet Health Score \u2014 Multi-Component",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
@@ -138,127 +145,9 @@
         },
         {
             "id": 2,
-            "title": "Fleet Health Score",
-            "description": "Overall fleet health 0\u2013100%. Composite of node availability, GPU health, and network fabric status.",
-            "type": "gauge",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 5,
-                "x": 0,
-                "y": 1
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "percentunit",
-                    "decimals": 1,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#C04040",
-                                "value": null
-                            },
-                            {
-                                "color": "#E0A939",
-                                "value": 0.9
-                            },
-                            {
-                                "color": "#56A64B",
-                                "value": 0.95
-                            }
-                        ]
-                    },
-                    "min": 0,
-                    "max": 1
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ]
-                },
-                "showThresholdLabels": false,
-                "showThresholdMarkers": true
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "avg(bcm_device_is_up{cluster=~\"$cluster\"}) * 0.5 + avg(clamp_max(clamp_min((gpu_health_overall{cluster=~\"$cluster\"} == 0) * 1, 0), 1)) * 0.3 + avg(clamp_max(clamp_min((nmxm_domain_health_count{cluster=~\"$cluster\", state=\"healthy\"} / clamp_min(nmxm_domain_health_count{cluster=~\"$cluster\"}, 1)), 0), 1)) * 0.2",
-                    "legendFormat": "Fleet Health",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 3,
-            "title": "Node State Distribution",
-            "description": "How many nodes are UP / DOWN / CLOSED / BURNING? Any non-UP node reduces capacity.",
-            "type": "piechart",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 5,
-                "x": 5,
-                "y": 1
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "none",
-                    "decimals": 0
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "pieType": "donut",
-                "tooltip": {
-                    "mode": "multi"
-                },
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "right",
-                    "calcs": [
-                        "lastNotNull"
-                    ]
-                }
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "count by (state) (bcm_node_state{cluster=~\"$cluster\"})",
-                    "legendFormat": "{{state}}",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 4,
-            "title": "SLA Uptime",
-            "description": "Node availability over the SLA measurement window. Target: \u2265 99.9%.",
-            "type": "gauge",
+            "title": "\ud83c\udfe5 Composite Fleet Score",
+            "description": "WHY: Single number to assess fleet readiness at a glance.\n\nFORMULA: Weighted average of 5 sub-scores:\n  \u2022 Node Availability (30%): nodes_up / nodes_total\n  \u2022 GPU Health (25%): nodes with gpu_health_overall == 0 / total\n  \u2022 NVLink Health (15%): nodes with gpu_health_nvlink == 0 / total\n  \u2022 GPU Utilization (15%): avg(gpu_utilization) / 100\n  \u2022 ECC Clean Rate (15%): nodes with no DBE / total\n\nGreen \u2265 95% = fleet operational. Yellow 90-95% = degraded. Red < 90% = critical.\nACTION: Score < 90% \u2192 escalate to hardware team immediately.",
+            "type": "stat",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
@@ -266,12 +155,12 @@
             "gridPos": {
                 "h": 6,
                 "w": 4,
-                "x": 10,
+                "x": 0,
                 "y": 1
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "percentunit",
+                    "unit": "percent",
                     "decimals": 1,
                     "thresholds": {
                         "mode": "absolute",
@@ -282,16 +171,16 @@
                             },
                             {
                                 "color": "#E0A939",
-                                "value": 0.995
+                                "value": 90
                             },
                             {
                                 "color": "#56A64B",
-                                "value": 0.999
+                                "value": 95
                             }
                         ]
                     },
-                    "min": 0,
-                    "max": 1
+                    "mappings": [],
+                    "noValue": "N/A"
                 },
                 "overrides": []
             },
@@ -299,10 +188,15 @@
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
-                    ]
+                    ],
+                    "fields": "",
+                    "values": false
                 },
-                "showThresholdLabels": false,
-                "showThresholdMarkers": true
+                "orientation": "auto",
+                "textMode": "value",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
             },
             "targets": [
                 {
@@ -311,16 +205,16 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "avg_over_time(avg(bcm_device_is_up{cluster=~\"$cluster\"})[30d:5m])",
-                    "legendFormat": "Uptime",
+                    "expr": "((sum(nodes_up{cluster=~\"$cluster\"}) / clamp_min(sum(nodes_total{cluster=~\"$cluster\"}), 1)) * 0.30 + (count(gpu_health_overall{cluster=~\"$cluster\"} == 0) / clamp_min(count(gpu_health_overall{cluster=~\"$cluster\"}), 1)) * 0.25 + (count(gpu_health_nvlink{cluster=~\"$cluster\"} == 0) / clamp_min(count(gpu_health_nvlink{cluster=~\"$cluster\"}), 1)) * 0.15 + (avg(gpu_utilization{cluster=~\"$cluster\"}) / 100) * 0.15 + (count(gpu_ecc_dbe_agg{cluster=~\"$cluster\"} == 0) / clamp_min(count(gpu_ecc_dbe_agg{cluster=~\"$cluster\"}), 1)) * 0.15) * 100",
+                    "legendFormat": "Fleet Score",
                     "instant": true
                 }
             ]
         },
         {
-            "id": 5,
-            "title": "Critical Alerts",
-            "description": "Active critical alerts across the fleet.",
+            "id": 3,
+            "title": "Node Availability",
+            "description": "WHY: What % of nodes are UP and serving workloads.\nFORMULA: nodes_up / nodes_total \u00d7 100.\nSLA TARGET: \u2265 99.5%.\nACTION: < 99% \u2192 immediate investigation.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -328,20 +222,28 @@
             },
             "gridPos": {
                 "h": 6,
-                "w": 3,
-                "x": 14,
+                "w": 4,
+                "x": 4,
                 "y": 1
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "none",
-                    "decimals": 0,
+                    "unit": "percent",
+                    "decimals": 1,
                     "thresholds": {
                         "mode": "absolute",
                         "steps": [
                             {
                                 "color": "#C04040",
                                 "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 95
+                            },
+                            {
+                                "color": "#56A64B",
+                                "value": 99
                             }
                         ]
                     },
@@ -359,8 +261,8 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "value",
+                "textMode": "value",
+                "colorMode": "background",
                 "graphMode": "none",
                 "justifyMode": "center"
             },
@@ -371,16 +273,152 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "count(ALERTS{alertstate=\"firing\", severity=\"critical\", cluster=~\"$cluster\"}) or vector(0)",
-                    "legendFormat": "Critical Alerts",
+                    "expr": "(sum(nodes_up{cluster=~\"$cluster\"}) / clamp_min(sum(nodes_total{cluster=~\"$cluster\"}), 1)) * 100",
+                    "legendFormat": "Availability",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 4,
+            "title": "GPU Health Score",
+            "description": "WHY: % of nodes with ALL GPUs healthy (DCGM overall check = 0).\nFORMULA: count(gpu_health_overall == 0) / count(gpu_health_overall) \u00d7 100.\nSLA TARGET: \u2265 99.5%.\nACTION: < 95% \u2192 multiple nodes have GPU issues.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 4,
+                "x": 8,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percent",
+                    "decimals": 1,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#C04040",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 95
+                            },
+                            {
+                                "color": "#56A64B",
+                                "value": 99
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "value",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "(count(gpu_health_overall{cluster=~\"$cluster\"} == 0) / clamp_min(count(gpu_health_overall{cluster=~\"$cluster\"}), 1)) * 100",
+                    "legendFormat": "GPU Health",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 5,
+            "title": "NVLink Health Score",
+            "description": "WHY: % of nodes with healthy NVLink (gpu_health_nvlink == 0).\nNVLink enables 900GB/s GPU-to-GPU communication \u2014 critical for multi-GPU.\nFORMULA: count(gpu_health_nvlink == 0) / count(gpu_health_nvlink) \u00d7 100.\nACTION: < 95% \u2192 NVLink cables or NVSwitch degradation.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 4,
+                "x": 12,
+                "y": 1
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percent",
+                    "decimals": 1,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#C04040",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 90
+                            },
+                            {
+                                "color": "#56A64B",
+                                "value": 99
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "value",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "(count(gpu_health_nvlink{cluster=~\"$cluster\"} == 0) / clamp_min(count(gpu_health_nvlink{cluster=~\"$cluster\"}), 1)) * 100",
+                    "legendFormat": "NVLink",
                     "instant": true
                 }
             ]
         },
         {
             "id": 6,
-            "title": "Warning Alerts",
-            "description": "Active warning alerts across the fleet.",
+            "title": "Fleet GPU Utilization",
+            "description": "WHY: Revenue indicator \u2014 low util = wasted GPU capacity = lost revenue.\nFORMULA: avg(gpu_utilization) across all nodes.\nTARGET: > 70% healthy. < 40% = investigate scheduling.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -388,20 +426,28 @@
             },
             "gridPos": {
                 "h": 6,
-                "w": 3,
-                "x": 18,
+                "w": 4,
+                "x": 16,
                 "y": 1
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "none",
-                    "decimals": 0,
+                    "unit": "percent",
+                    "decimals": 1,
                     "thresholds": {
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "#E0A939",
+                                "color": "#C04040",
                                 "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 40
+                            },
+                            {
+                                "color": "#56A64B",
+                                "value": 70
                             }
                         ]
                     },
@@ -419,8 +465,8 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "value",
+                "textMode": "value",
+                "colorMode": "background",
                 "graphMode": "none",
                 "justifyMode": "center"
             },
@@ -431,16 +477,16 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "count(ALERTS{alertstate=\"firing\", severity=\"warning\", cluster=~\"$cluster\"}) or vector(0)",
-                    "legendFormat": "Warning Alerts",
+                    "expr": "avg(gpu_utilization{cluster=~\"$cluster\"})",
+                    "legendFormat": "Avg Util",
                     "instant": true
                 }
             ]
         },
         {
             "id": 7,
-            "title": "Info Alerts",
-            "description": "Active info alerts across the fleet.",
+            "title": "ECC Clean Rate",
+            "description": "WHY: % of nodes with zero uncorrectable GPU memory errors (DBE).\nFORMULA: count(gpu_ecc_dbe_agg == 0) / count(gpu_ecc_dbe_agg) \u00d7 100.\nACTION: < 100% \u2192 some nodes have uncorrectable errors \u2192 GPU replacement.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -448,20 +494,28 @@
             },
             "gridPos": {
                 "h": 6,
-                "w": 3,
-                "x": 22,
+                "w": 4,
+                "x": 20,
                 "y": 1
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "none",
-                    "decimals": 0,
+                    "unit": "percent",
+                    "decimals": 1,
                     "thresholds": {
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "#6ED0E0",
+                                "color": "#C04040",
                                 "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 95
+                            },
+                            {
+                                "color": "#56A64B",
+                                "value": 100
                             }
                         ]
                     },
@@ -479,8 +533,8 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "value",
+                "textMode": "value",
+                "colorMode": "background",
                 "graphMode": "none",
                 "justifyMode": "center"
             },
@@ -491,15 +545,15 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "count(ALERTS{alertstate=\"firing\", severity=\"info\", cluster=~\"$cluster\"}) or vector(0)",
-                    "legendFormat": "Info Alerts",
+                    "expr": "(count(gpu_ecc_dbe_agg{cluster=~\"$cluster\"} == 0) / clamp_min(count(gpu_ecc_dbe_agg{cluster=~\"$cluster\"}), 1)) * 100",
+                    "legendFormat": "ECC Clean",
                     "instant": true
                 }
             ]
         },
         {
             "type": "row",
-            "title": "GPU Fleet & NVLink Status",
+            "title": "Node Status",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
@@ -512,8 +566,8 @@
         },
         {
             "id": 9,
-            "title": "GPUs Healthy",
-            "description": "Number of GPUs in healthy state per NMX telemetry.",
+            "title": "Nodes UP",
+            "description": "WHY: Nodes actively serving workloads = your available capacity.\n\nMETRIC: nodes_up \u2014 BCM nodes in operational UP state.\nSIGNIFICANCE: This is the count of nodes that can accept jobs.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -521,7 +575,7 @@
             },
             "gridPos": {
                 "h": 5,
-                "w": 4,
+                "w": 6,
                 "x": 0,
                 "y": 8
             },
@@ -552,7 +606,7 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
+                "textMode": "value",
                 "colorMode": "background",
                 "graphMode": "none",
                 "justifyMode": "center"
@@ -564,16 +618,16 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum(nmxm_gpu_health_count{cluster=~\"$cluster\", state=\"healthy\"}) or vector(0)",
-                    "legendFormat": "",
+                    "expr": "sum(nodes_up{cluster=~\"$cluster\"})",
+                    "legendFormat": "Nodes UP",
                     "instant": true
                 }
             ]
         },
         {
             "id": 10,
-            "title": "GPUs Degraded",
-            "description": "Number of GPUs in degraded state per NMX telemetry.",
+            "title": "Nodes DOWN",
+            "description": "WHY: DOWN nodes = lost revenue + SLA risk. Needs immediate investigation.\n\nMETRIC: nodes_down \u2014 BCM nodes in DOWN state (not operational).\nACTION: > 0 = investigate hardware, cooling, network connectivity.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -581,8 +635,8 @@
             },
             "gridPos": {
                 "h": 5,
-                "w": 4,
-                "x": 4,
+                "w": 6,
+                "x": 6,
                 "y": 8
             },
             "fieldConfig": {
@@ -593,8 +647,12 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "#E0A939",
+                                "color": "#56A64B",
                                 "value": null
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 1
                             }
                         ]
                     },
@@ -612,7 +670,7 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
+                "textMode": "value",
                 "colorMode": "background",
                 "graphMode": "none",
                 "justifyMode": "center"
@@ -624,16 +682,16 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum(nmxm_gpu_health_count{cluster=~\"$cluster\", state=\"degraded\"}) or vector(0)",
-                    "legendFormat": "",
+                    "expr": "sum(nodes_down{cluster=~\"$cluster\"}) or vector(0)",
+                    "legendFormat": "Nodes DOWN",
                     "instant": true
                 }
             ]
         },
         {
             "id": 11,
-            "title": "GPUs Unhealthy",
-            "description": "Number of GPUs in unhealthy state per NMX telemetry.",
+            "title": "Nodes Closed",
+            "description": "WHY: CLOSED = intentionally taken offline by admin/BCM.\n\nMETRIC: nodes_closed \u2014 nodes in CLOSED state.\nMEANING: 'Closed' in BCM means the node is reachable and managed but NOT accepting workloads. Typically used during maintenance, burn-in testing, or hardware validation. The node is between UP and DOWN \u2014 it's healthy enough to be managed but intentionally excluded from the scheduling pool.\nNOTE: High count during burn-in cycles is normal. Sustained outside burn-in = investigate.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -641,8 +699,8 @@
             },
             "gridPos": {
                 "h": 5,
-                "w": 4,
-                "x": 8,
+                "w": 6,
+                "x": 12,
                 "y": 8
             },
             "fieldConfig": {
@@ -653,8 +711,12 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "#C04040",
+                                "color": "#56A64B",
                                 "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 1
                             }
                         ]
                     },
@@ -672,7 +734,7 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
+                "textMode": "value",
                 "colorMode": "background",
                 "graphMode": "none",
                 "justifyMode": "center"
@@ -684,16 +746,16 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum(nmxm_gpu_health_count{cluster=~\"$cluster\", state=\"unhealthy\"}) or vector(0)",
-                    "legendFormat": "",
+                    "expr": "sum(nodes_closed{cluster=~\"$cluster\"}) or vector(0)",
+                    "legendFormat": "Closed",
                     "instant": true
                 }
             ]
         },
         {
             "id": 12,
-            "title": "NVLink Domains Healthy",
-            "description": "NVLink domains in healthy state. Unhealthy domains prevent multi-node jobs.",
+            "title": "Fleet Size (Total)",
+            "description": "WHY: Total nodes in fleet \u2014 baseline for capacity calculations.\n\nMETRIC: nodes_total \u2014 total nodes managed by BCM.\nCHECK: UP + DOWN + CLOSED should equal TOTAL.",
             "type": "stat",
             "datasource": {
                 "type": "prometheus",
@@ -701,478 +763,13 @@
             },
             "gridPos": {
                 "h": 5,
-                "w": 4,
-                "x": 12,
+                "w": 6,
+                "x": 18,
                 "y": 8
             },
             "fieldConfig": {
                 "defaults": {
                     "unit": "none",
-                    "decimals": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#56A64B",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "mappings": [],
-                    "noValue": "N/A"
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(nmxm_domain_health_count{cluster=~\"$cluster\", state=\"healthy\"}) or vector(0)",
-                    "legendFormat": "",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 13,
-            "title": "NVLink Switches UP",
-            "description": "Active NVLink switches. DOWN switches reduce fabric bandwidth.",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 5,
-                "w": 4,
-                "x": 16,
-                "y": 8
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "none",
-                    "decimals": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#56A64B",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "mappings": [],
-                    "noValue": "N/A"
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(NVLinkSwitchesUp{cluster=~\"$cluster\"}) or vector(0)",
-                    "legendFormat": "",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 14,
-            "title": "NVLink Switches DOWN",
-            "description": "NVLink switches in DOWN state. Any > 0 = degraded fabric.",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 5,
-                "w": 4,
-                "x": 20,
-                "y": 8
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "none",
-                    "decimals": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#56A64B",
-                                "value": null
-                            },
-                            {
-                                "color": "#C04040",
-                                "value": 1
-                            }
-                        ]
-                    },
-                    "mappings": [],
-                    "noValue": "N/A"
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(NVLinkSwitchesDown{cluster=~\"$cluster\"}) or vector(0)",
-                    "legendFormat": "",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "Power, Cooling & Safety",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 13
-            },
-            "id": 15,
-            "panels": []
-        },
-        {
-            "id": 16,
-            "title": "PSU Health",
-            "description": "Healthy PSU ratio. < 1.0 = degraded power redundancy.",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 5,
-                "w": 4,
-                "x": 0,
-                "y": 14
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "percentunit",
-                    "decimals": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#C04040",
-                                "value": null
-                            },
-                            {
-                                "color": "#E0A939",
-                                "value": 0.8
-                            },
-                            {
-                                "color": "#56A64B",
-                                "value": 1
-                            }
-                        ]
-                    },
-                    "mappings": [],
-                    "noValue": "N/A"
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "avg(TotalPowerShelfHealthyPSU{cluster=~\"$cluster\"}) or vector(1)",
-                    "legendFormat": "",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 17,
-            "title": "CDU Avg Return Temp",
-            "description": "Average liquid cooling return temperature across CDUs.",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 5,
-                "w": 4,
-                "x": 4,
-                "y": 14
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "celsius",
-                    "decimals": 1,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#56A64B",
-                                "value": null
-                            },
-                            {
-                                "color": "#E0A939",
-                                "value": 40
-                            },
-                            {
-                                "color": "#C04040",
-                                "value": 50
-                            }
-                        ]
-                    },
-                    "mappings": [],
-                    "noValue": "N/A"
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "avg(CDULiquidReturnTemperature{cluster=~\"$cluster\"})",
-                    "legendFormat": "",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 18,
-            "title": "CDU Avg Flow Rate",
-            "description": "Average liquid flow rate. Low flow = reduced cooling capacity.",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 5,
-                "w": 4,
-                "x": 8,
-                "y": 14
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "short",
-                    "decimals": 1,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#C04040",
-                                "value": null
-                            },
-                            {
-                                "color": "#E0A939",
-                                "value": 5
-                            },
-                            {
-                                "color": "#56A64B",
-                                "value": 10
-                            }
-                        ]
-                    },
-                    "mappings": [],
-                    "noValue": "N/A"
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "avg(CDULiquidFlow{cluster=~\"$cluster\"})",
-                    "legendFormat": "",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 19,
-            "title": "\u26a0\ufe0f Leak Detection",
-            "description": "Number of devices with active leaks. ANY > 0 = EMERGENCY.",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 5,
-                "w": 4,
-                "x": 12,
-                "y": 14
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "none",
-                    "decimals": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "#56A64B",
-                                "value": null
-                            },
-                            {
-                                "color": "#C04040",
-                                "value": 1
-                            }
-                        ]
-                    },
-                    "mappings": [],
-                    "noValue": "N/A"
-                },
-                "overrides": []
-            },
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "center"
-            },
-            "targets": [
-                {
-                    "refId": "A",
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "${datasource}"
-                    },
-                    "expr": "sum(DevicesWithLeaks{cluster=~\"$cluster\"}) or vector(0)",
-                    "legendFormat": "",
-                    "instant": true
-                }
-            ]
-        },
-        {
-            "id": 20,
-            "title": "Total Power Draw",
-            "description": "Total power consumption across all circuits.",
-            "type": "stat",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 5,
-                "w": 4,
-                "x": 16,
-                "y": 14
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "unit": "watt",
                     "decimals": 0,
                     "thresholds": {
                         "mode": "absolute",
@@ -1197,7 +794,7 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
+                "textMode": "value",
                 "colorMode": "value",
                 "graphMode": "none",
                 "justifyMode": "center"
@@ -1209,31 +806,44 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum(TotalCircuitPower{cluster=~\"$cluster\"}) or vector(0)",
-                    "legendFormat": "",
+                    "expr": "sum(nodes_total{cluster=~\"$cluster\"})",
+                    "legendFormat": "Total",
                     "instant": true
                 }
             ]
         },
         {
-            "id": 21,
-            "title": "Job Success Rate (24h)",
-            "description": "Percentage of jobs completed successfully in last 24 hours.",
-            "type": "stat",
+            "type": "row",
+            "title": "GPU-Focused Status (DGX Nodes)",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 13
+            },
+            "id": 13,
+            "panels": []
+        },
+        {
+            "id": 14,
+            "title": "GPU Count per Entity",
+            "description": "WHY: Validate hardware config \u2014 B200 DGX should have 8 GPUs per node.\n\nMETRIC: gpu_count \u2014 number of GPUs detected by DCGM per entity.\nSIGNIFICANCE: < 8 = GPU not detected = hardware failure on that node.\nACTION: Any entity showing < 8 \u2192 check GPU seating, PCIe, DCGM logs.",
+            "type": "bargauge",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 5,
-                "w": 4,
-                "x": 20,
+                "h": 8,
+                "w": 8,
+                "x": 0,
                 "y": 14
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "percentunit",
-                    "decimals": 1,
+                    "unit": "none",
+                    "decimals": 0,
                     "thresholds": {
                         "mode": "absolute",
                         "steps": [
@@ -1243,11 +853,176 @@
                             },
                             {
                                 "color": "#E0A939",
-                                "value": 0.9
+                                "value": 7
                             },
                             {
                                 "color": "#56A64B",
-                                "value": 0.95
+                                "value": 8
+                            }
+                        ]
+                    },
+                    "noValue": "N/A"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "horizontal",
+                "displayMode": "gradient",
+                "showUnfilled": true
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu_count{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 15,
+            "title": "GPU Health Matrix (per Node)",
+            "description": "WHY: Instantly see which DGX nodes have GPU health issues.\n\nMETRIC: gpu_health_overall \u2014 DCGM aggregate health check per entity.\n0 = ALL PASS (green), > 0 = FAIL (red). Each row = one DGX node.\nSIGNIFICANCE: Failed nodes should NOT receive new workloads.",
+            "type": "state-timeline",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 8,
+                "y": 14
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "lineWidth": 0,
+                        "fillOpacity": 80
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#56A64B",
+                                "value": null
+                            },
+                            {
+                                "color": "#E0A939",
+                                "value": 1
+                            },
+                            {
+                                "color": "#C04040",
+                                "value": 2
+                            },
+                            {
+                                "color": "#8F8F8F",
+                                "value": 3
+                            }
+                        ]
+                    },
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "0": {
+                                    "text": "PASS",
+                                    "color": "#56A64B"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "1": {
+                                    "text": "WARN",
+                                    "color": "#E0A939"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "2": {
+                                    "text": "FAIL",
+                                    "color": "#C04040"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "3": {
+                                    "text": "UNK",
+                                    "color": "#8F8F8F"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "overrides": []
+            },
+            "options": {
+                "showValue": "auto",
+                "mergeValues": true,
+                "alignValue": "center",
+                "rowHeight": 0.85,
+                "tooltip": {
+                    "mode": "multi"
+                },
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu_health_overall{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
+                }
+            ]
+        },
+        {
+            "id": 16,
+            "title": "GPU Switches UP / DOWN",
+            "description": "WHY: GPU switches (gp_us) are the NVSwitch ASICs on the DGX baseboard.\n\nWHAT ARE THEY: Each DGX B200 has 4 NVSwitch chips that form the internal GPU-to-GPU NVLink mesh. They enable all-to-all GPU communication at 900GB/s. Without functional NVSwitches, GPUs cannot do multi-GPU collective operations (AllReduce, AllGather) which are essential for distributed training.\n\nMETRIC: gp_us_up / gp_us_down \u2014 GPU switches in UP vs DOWN state.\nACTION: gp_us_down > 0 \u2192 affected node's GPUs cannot communicate properly. Check NVSwitch, may need baseboard replacement.",
+            "type": "stat",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 8,
+                "x": 16,
+                "y": 14
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#3274D9",
+                                "value": null
                             }
                         ]
                     },
@@ -1265,8 +1040,8 @@
                     "values": false
                 },
                 "orientation": "auto",
-                "textMode": "auto",
-                "colorMode": "background",
+                "textMode": "value_and_name",
+                "colorMode": "value",
                 "graphMode": "none",
                 "justifyMode": "center"
             },
@@ -1277,172 +1052,69 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum(bcm_job_completed{cluster=~\"$cluster\"}) / clamp_min(sum(bcm_job_completed{cluster=~\"$cluster\"}) + sum(bcm_job_failed{cluster=~\"$cluster\"}), 1)",
-                    "legendFormat": "",
+                    "expr": "sum(gp_us_up{cluster=~\"$cluster\"}) or vector(0)",
+                    "legendFormat": "UP",
                     "instant": true
-                }
-            ]
-        },
-        {
-            "type": "row",
-            "title": "Nodes Requiring Attention",
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 19
-            },
-            "id": 22,
-            "panels": []
-        },
-        {
-            "id": 23,
-            "title": "Nodes Requiring Action",
-            "description": "Nodes with active issues: ECC DBE, row remap failure, critical XID, health check failures, thermal violations.",
-            "type": "table",
-            "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 20
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "custom": {
-                        "align": "auto",
-                        "displayMode": "auto",
-                        "filterable": true
-                    }
                 },
-                "overrides": [
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "Severity Score"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.displayMode",
-                                "value": "color-background-solid"
-                            },
-                            {
-                                "id": "thresholds",
-                                "value": {
-                                    "mode": "absolute",
-                                    "steps": [
-                                        {
-                                            "color": "#E0A939",
-                                            "value": null
-                                        },
-                                        {
-                                            "color": "#C04040",
-                                            "value": 50
-                                        }
-                                    ]
-                                }
-                            }
-                        ]
-                    }
-                ]
-            },
-            "options": {
-                "showHeader": true,
-                "sortBy": [
-                    {
-                        "displayName": "Severity Score",
-                        "desc": true
-                    }
-                ]
-            },
-            "transformations": [
                 {
-                    "id": "organize",
-                    "options": {
-                        "excludeByName": {
-                            "Time": true,
-                            "__name__": true,
-                            "job": true,
-                            "cluster": true
-                        },
-                        "renameByName": {
-                            "instance": "Node",
-                            "gpu": "GPU",
-                            "Value": "Severity Score"
-                        }
-                    }
-                }
-            ],
-            "targets": [
-                {
-                    "refId": "A",
+                    "refId": "B",
                     "datasource": {
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "((gpu_ecc_dbe_agg{cluster=~\"$cluster\"} > 0) * 100 + (gpu_row_remap_failure{cluster=~\"$cluster\"} == 1) * 50 + (gpu_thermal_violation{cluster=~\"$cluster\"} > 0) * 10)",
-                    "legendFormat": "",
-                    "format": "table",
+                    "expr": "sum(gp_us_down{cluster=~\"$cluster\"}) or vector(0)",
+                    "legendFormat": "DOWN",
                     "instant": true
                 }
             ]
         },
         {
-            "id": 24,
-            "title": "Hardware Replacement Queue",
-            "description": "Nodes flagged for RMA based on ECC DBE > 0, row remap failure, or NVSwitch fatal errors.",
-            "type": "table",
+            "id": 17,
+            "title": "Managed Switches",
+            "description": "WHY: Managed network switches connect DGX nodes to data center network fabric.\n\nMETRIC: managed_switches_up / managed_switches_down.\nSIGNIFICANCE: DOWN switch = node(s) isolated from network \u2192 jobs fail.",
+            "type": "stat",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
             },
             "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 20
+                "h": 4,
+                "w": 8,
+                "x": 16,
+                "y": 18
             },
             "fieldConfig": {
                 "defaults": {
-                    "custom": {
-                        "align": "auto",
-                        "displayMode": "auto",
-                        "filterable": true
-                    }
+                    "unit": "none",
+                    "decimals": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "#3274D9",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "mappings": [],
+                    "noValue": "N/A"
                 },
                 "overrides": []
             },
             "options": {
-                "showHeader": true,
-                "sortBy": [
-                    {
-                        "displayName": "Error Signal",
-                        "desc": true
-                    }
-                ]
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "auto",
+                "textMode": "value_and_name",
+                "colorMode": "value",
+                "graphMode": "none",
+                "justifyMode": "center"
             },
-            "transformations": [
-                {
-                    "id": "organize",
-                    "options": {
-                        "excludeByName": {
-                            "Time": true,
-                            "__name__": true,
-                            "job": true,
-                            "cluster": true
-                        },
-                        "renameByName": {
-                            "instance": "Node",
-                            "gpu": "GPU",
-                            "Value": "Error Signal"
-                        }
-                    }
-                }
-            ],
             "targets": [
                 {
                     "refId": "A",
@@ -1450,30 +1122,39 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "(gpu_ecc_dbe_agg{cluster=~\"$cluster\"} > 0) or (gpu_row_remap_failure{cluster=~\"$cluster\"} == 1) or (gpu_health_nvswitch_fatal{cluster=~\"$cluster\"} != 0)",
-                    "legendFormat": "",
-                    "format": "table",
+                    "expr": "sum(managed_switches_up{cluster=~\"$cluster\"}) or vector(0)",
+                    "legendFormat": "UP",
+                    "instant": true
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(managed_switches_down{cluster=~\"$cluster\"}) or vector(0)",
+                    "legendFormat": "DOWN",
                     "instant": true
                 }
             ]
         },
         {
             "type": "row",
-            "title": "Fleet Trends",
+            "title": "Power Consumption (per Entity)",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 28
+                "y": 22
             },
-            "id": 25,
+            "id": 18,
             "panels": []
         },
         {
-            "id": 26,
-            "title": "Node Availability Over Time",
-            "description": "Fraction of nodes reporting UP over time.",
+            "id": 19,
+            "title": "GPU Power per Entity",
+            "description": "WHY: Track GPU power draw per DGX node. B200 = 8 \u00d7 1000W = 8kW max.\n\nMETRIC: gpu_power_usage \u2014 per-entity aggregate GPU power.\nNOTE: Each entity name (e.g., skt-dgx0102) is shown individually.\nSIGNIFICANCE: Sustained at TDP = healthy. Well below during load = throttling.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1481,18 +1162,18 @@
             },
             "gridPos": {
                 "h": 6,
-                "w": 12,
+                "w": 8,
                 "x": 0,
-                "y": 29
+                "y": 23
             },
             "fieldConfig": {
                 "defaults": {
-                    "unit": "percentunit",
+                    "unit": "watt",
                     "custom": {
                         "lineWidth": 2,
                         "fillOpacity": 10,
                         "gradientMode": "none",
-                        "axisLabel": "Availability",
+                        "axisLabel": "GPU Power",
                         "drawStyle": "line",
                         "pointSize": 4,
                         "showPoints": "never",
@@ -1510,7 +1191,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -1524,15 +1207,597 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "avg(bcm_device_is_up{cluster=~\"$cluster\"})",
+                    "expr": "gpu_power_usage{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
+                }
+            ]
+        },
+        {
+            "id": 20,
+            "title": "CPU Power per Entity",
+            "description": "WHY: CPU handles job orchestration, data loading, I/O.\n\nMETRIC: cpu_power_usage \u2014 per-entity CPU power.\nNOTE: Typically 300-500W for dual-socket Grace CPUs.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 8,
+                "y": 23
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "watt",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "CPU Power",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "cpu_power_usage{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
+                }
+            ]
+        },
+        {
+            "id": 21,
+            "title": "Combined Power (GPU+CPU) per Entity",
+            "description": "WHY: Total power envelope per node \u2014 for capacity planning and billing.\n\nFORMULA: gpu_power_usage + cpu_power_usage by entity.\nSIGNIFICANCE: Each bar = one DGX node's total power draw.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 16,
+                "y": 23
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "watt",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Total Power",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu_power_usage{entity=~\"$node\",cluster=~\"$cluster\"} + cpu_power_usage{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "NVLink & Fabric Health",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 29
+            },
+            "id": 22,
+            "panels": []
+        },
+        {
+            "id": 23,
+            "title": "GPU NVLink Health (per Entity)",
+            "description": "WHY: NVLink health per entity \u2014 0 = all links healthy, > 0 = degraded.\n\nMETRIC: gpu_health_nvlink \u2014 DCGM NVLink health check.\nSIGNIFICANCE: Unhealthy NVLink = reduced multi-GPU bandwidth.\nACTION: > 0 \u2192 check NVLink cables, NVSwitch on affected node.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 0,
+                "y": 30
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Health (0=OK)",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu_health_nvlink{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
+                }
+            ]
+        },
+        {
+            "id": 24,
+            "title": "GPU NVLink CRC Data Errors",
+            "description": "WHY: CRC errors = data integrity failures on NVLink interconnect.\n\nMETRIC: gpu_nvlink_crc_data_errors \u2014 cumulative CRC error count.\nACTION: Rising trend = cable/connector degrading. Reseat or replace NVLink cable.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 8,
+                "y": 30
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "CRC Errors",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu_nvlink_crc_data_errors{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
+                }
+            ]
+        },
+        {
+            "id": 25,
+            "title": "GPU NVLink Total Bandwidth",
+            "description": "WHY: Verify NVLink fabric delivering expected throughput.\n\nMETRIC: gpu_nvlink_total_bandwidth \u2014 aggregate NVLink BW per entity.\nEXPECTED: B200 NVLink ~900GB/s per GPU pair.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 16,
+                "y": 30
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Bandwidth",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu_nvlink_total_bandwidth{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "SLA Targets & Compliance",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 36
+            },
+            "id": 26,
+            "panels": []
+        },
+        {
+            "id": 27,
+            "title": "SLA Definitions & Targets",
+            "type": "text",
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 0,
+                "y": 37
+            },
+            "options": {
+                "mode": "markdown",
+                "content": "## SLA Targets (Aspirational)\n\n| Metric | Target | Breach |\n|--------|--------|--------|\n| **Node Uptime** | \u2265 99.5% | < 99% |\n| **GPU Healthy** | \u2265 99.5% | < 95% |\n| **NVLink Fabric** | \u2265 99% | < 95% |\n| **Network Switches** | \u2265 99% | < 95% |\n\n> **NOTE**: These are aspirational targets. Node uptime 99.5% is the primary contractual SLA.\n\n## RMA Priority Scoring\n\n| Signal | Score | Action |\n|--------|-------|--------|\n| `gpu_ecc_dbe_agg > 0` | **+100** | Immediate GPU replacement |\n| `hardware_corrupted_memory > 0` | **+75** | DIMM replacement |\n| `gpu_row_remap_failure == 1` | **+50** | GPU exchange |\n| `gpu_uncorrectable_remapped_rows > 0` | **+25** | Schedule GPU swap |\n\n## Escalation\n\n- **P0** (DBE): \u2192 Eng Lead + Customer (immediate)\n- **P1** (Row Remap/Thermal): \u2192 Hardware Team (4h SLA)\n- **P2** (SBE trend/Throttle): \u2192 Monitoring Review (24h)\n"
+            }
+        },
+        {
+            "id": 28,
+            "title": "Node Availability Trend",
+            "description": "WHY: Track availability trend over time against SLA target.\n\nFORMULA: nodes_up / nodes_total \u2014 fraction of fleet online.\nSLA TARGET: \u2265 99.5%. Red line = breach threshold.\nSIGNIFICANCE: Dips below 99.5% = SLA breach risk.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 8,
+                "y": 37
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percentunit",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Availability",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byFrameRefID",
+                            "options": "A"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.thresholdsStyle",
+                                "value": {
+                                    "mode": "line"
+                                }
+                            },
+                            {
+                                "id": "thresholds",
+                                "value": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {
+                                            "color": "transparent",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#C04040",
+                                            "value": 0.995
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "sum(nodes_up{cluster=~\"$cluster\"}) / clamp_min(sum(nodes_total{cluster=~\"$cluster\"}), 1)",
                     "legendFormat": "Availability"
                 }
             ]
         },
         {
-            "id": 27,
-            "title": "GPU ECC Error Trend (Fleet)",
-            "description": "Fleet-wide SBE vs DBE trends. Rising SBE = early degradation.",
+            "id": 29,
+            "title": "NVIDIA License: Licensed vs Used",
+            "description": "WHY: Track GPU license utilization \u2014 unused licenses = wasted spending.\n\nMETRICS:\n  \u2022 nvidia_licensed_compute_resources \u2014 total licensed GPU resources\n  \u2022 nvidia_used_gpu_resources \u2014 actually consumed GPU resources\nSIGNIFICANCE: Gap = room for growth or waste.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 16,
+                "y": 37
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "GPU Resources",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "nvidia_licensed_compute_resources{cluster=~\"$cluster\"}",
+                    "legendFormat": "Licensed"
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "nvidia_used_gpu_resources{cluster=~\"$cluster\"}",
+                    "legendFormat": "Used"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "Fleet GPU Utilization",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 45
+            },
+            "id": 30,
+            "panels": []
+        },
+        {
+            "id": 31,
+            "title": "GPU Utilization (per Entity)",
+            "description": "WHY: Per-node GPU utilization \u2014 which nodes are idle vs loaded.\n\nMETRIC: gpu_utilization \u2014 percentage of GPU compute used per entity.\nTARGET: > 70% = healthy. < 40% = wasted GPU capacity.\nACTION: Consistently low on specific nodes = scheduling issue.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 0,
+                "y": 46
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percent",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Utilization %",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "gpu_utilization{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
+                }
+            ]
+        },
+        {
+            "id": 32,
+            "title": "Fleet Avg GPU Utilization (Trend)",
+            "description": "WHY: Fleet-wide GPU utilization trend \u2014 is capacity being used efficiently?\n\nFORMULA: avg(gpu_utilization) across all nodes.\nSIGNIFICANCE: Trending down = workload migration or scheduling problem.",
             "type": "timeseries",
             "datasource": {
                 "type": "prometheus",
@@ -1542,7 +1807,81 @@
                 "h": 6,
                 "w": 12,
                 "x": 12,
-                "y": 29
+                "y": 46
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percent",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Utilization %",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "avg(gpu_utilization{cluster=~\"$cluster\"})",
+                    "legendFormat": "Fleet Avg"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "XID / DCGM Errors & Alerts",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 52
+            },
+            "id": 33,
+            "panels": []
+        },
+        {
+            "id": 34,
+            "title": "Fleet GPU ECC Error Trend",
+            "description": "WHY: Rising ECC errors across fleet = aging/degrading HBM memory.\n\nMETRIC: gpu_ecc_sbe_agg (correctable) vs gpu_ecc_dbe_agg (UNCORRECTABLE).\nSBE rising = early warning of memory degradation.\nDBE > 0 = IMMEDIATE GPU REPLACEMENT \u2014 data corruption occurred.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 0,
+                "y": 53
             },
             "fieldConfig": {
                 "defaults": {
@@ -1562,7 +1901,7 @@
                     {
                         "matcher": {
                             "id": "byName",
-                            "options": "DBE Total"
+                            "options": "DBE (Uncorrectable)"
                         },
                         "properties": [
                             {
@@ -1577,7 +1916,7 @@
                     {
                         "matcher": {
                             "id": "byName",
-                            "options": "SBE Total"
+                            "options": "SBE (Correctable)"
                         },
                         "properties": [
                             {
@@ -1600,7 +1939,9 @@
                         "max",
                         "mean",
                         "lastNotNull"
-                    ]
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
                 },
                 "tooltip": {
                     "mode": "multi",
@@ -1614,8 +1955,8 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum(gpu_ecc_sbe_agg{cluster=~\"$cluster\"})",
-                    "legendFormat": "SBE Total"
+                    "expr": "sum(gpu_ecc_sbe_agg{entity=~\"$node\",cluster=~\"$cluster\"})",
+                    "legendFormat": "SBE (Correctable)"
                 },
                 {
                     "refId": "B",
@@ -1623,8 +1964,330 @@
                         "type": "prometheus",
                         "uid": "${datasource}"
                     },
-                    "expr": "sum(gpu_ecc_dbe_agg{cluster=~\"$cluster\"})",
-                    "legendFormat": "DBE Total"
+                    "expr": "sum(gpu_ecc_dbe_agg{entity=~\"$node\",cluster=~\"$cluster\"})",
+                    "legendFormat": "DBE (Uncorrectable)"
+                }
+            ]
+        },
+        {
+            "id": 35,
+            "title": "GPU Health Failures Over Time",
+            "description": "WHY: Count of nodes with GPU health issues trending over time.\n\nFORMULA: count(gpu_health_overall > 0).\nSIGNIFICANCE: Rising trend = fleet aging, environmental issue, or batch defect.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 8,
+                "y": 53
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Failing Nodes",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "count(gpu_health_overall{cluster=~\"$cluster\"} > 0) or vector(0)",
+                    "legendFormat": "Failures"
+                }
+            ]
+        },
+        {
+            "id": 36,
+            "title": "Alert Level per Entity",
+            "description": "WHY: BCM alert level per entity \u2014 identifies which specific nodes have alerts.\n\nMETRIC: alert_level \u2014 BCM's internal severity scoring per entity.\nNOTE: This is a BCM-internal aggregate. Higher values = more/worse alerts on that node.\nACTION: Sort by highest to find the most problematic nodes.",
+            "type": "timeseries",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 8,
+                "x": 16,
+                "y": 53
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "axisLabel": "Alert Level",
+                        "drawStyle": "line",
+                        "pointSize": 4,
+                        "showPoints": "never",
+                        "spanNulls": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "min",
+                        "max",
+                        "mean",
+                        "lastNotNull"
+                    ],
+                    "sortBy": "Last *",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "alert_level{entity=~\"$node\",cluster=~\"$cluster\"}",
+                    "legendFormat": "{{entity}}"
+                }
+            ]
+        },
+        {
+            "type": "row",
+            "title": "Nodes Requiring Attention",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 59
+            },
+            "id": 37,
+            "panels": []
+        },
+        {
+            "id": 38,
+            "title": "GPU RMA Priority Table",
+            "description": "WHY: Proactively identify nodes needing hardware replacement.\n\nSCORING:\n  \u2022 gpu_ecc_dbe_agg > 0 = +100 (uncorrectable memory \u2192 IMMEDIATE)\n  \u2022 hardware_corrupted_memory > 0 = +75 (bad DIMM)\n  \u2022 gpu_row_remap_failure == 1 = +50 (HBM repair exhausted)\n  \u2022 gpu_uncorrectable_remapped_rows > 0 = +25 (schedule swap)\n\nScore \u2265 100 = emergency RMA. Score \u2265 50 = escalate. Score > 0 = schedule.",
+            "type": "table",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 60
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "RMA Score"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.displayMode",
+                                "value": "color-background-solid"
+                            },
+                            {
+                                "id": "thresholds",
+                                "value": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {
+                                            "color": "#56A64B",
+                                            "value": null
+                                        },
+                                        {
+                                            "color": "#E0A939",
+                                            "value": 25
+                                        },
+                                        {
+                                            "color": "#C04040",
+                                            "value": 50
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "options": {
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "displayName": "RMA Score",
+                        "desc": true
+                    }
+                ]
+            },
+            "transformations": [
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true,
+                            "job": true,
+                            "cluster": true
+                        },
+                        "renameByName": {
+                            "entity": "Node",
+                            "Value": "RMA Score"
+                        }
+                    }
+                }
+            ],
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "(gpu_ecc_dbe_agg{entity=~\"$node\",cluster=~\"$cluster\"} > 0) * 100 + (hardware_corrupted_memory{entity=~\"$node\",cluster=~\"$cluster\"} > 0) * 75 + (gpu_row_remap_failure{entity=~\"$node\",cluster=~\"$cluster\"} == 1) * 50 + (gpu_uncorrectable_remapped_rows{entity=~\"$node\",cluster=~\"$cluster\"} > 0) * 25",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                }
+            ]
+        },
+        {
+            "id": 39,
+            "title": "Node State Distribution",
+            "description": "WHY: Snapshot of all nodes and their current state.\n\nMETRICS: nodes_up, nodes_down, nodes_closed, nodes_total.\nUSE: Quick reference for fleet composition at this moment.",
+            "type": "table",
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 60
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "align": "auto",
+                        "displayMode": "auto",
+                        "filterable": true
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "displayName": "Node",
+                        "desc": false
+                    }
+                ]
+            },
+            "transformations": [
+                {
+                    "id": "merge",
+                    "options": {}
+                },
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true,
+                            "__name__": true,
+                            "job": true
+                        },
+                        "renameByName": {
+                            "entity": "Node"
+                        }
+                    }
+                }
+            ],
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "nodes_up{cluster=~\"$cluster\"}",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                },
+                {
+                    "refId": "B",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "nodes_down{cluster=~\"$cluster\"}",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
+                },
+                {
+                    "refId": "C",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${datasource}"
+                    },
+                    "expr": "nodes_closed{cluster=~\"$cluster\"}",
+                    "legendFormat": "",
+                    "format": "table",
+                    "instant": true
                 }
             ]
         }
@@ -1663,20 +2326,6 @@
             "type": "link",
             "icon": "dashboard",
             "url": "/d/bmaas-04-workload-perf?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
-            "targetBlank": false
-        },
-        {
-            "title": "05 Burn-in & Certification",
-            "type": "link",
-            "icon": "dashboard",
-            "url": "/d/bmaas-05-burnin-cert?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
-            "targetBlank": false
-        },
-        {
-            "title": "06 SLA Compliance",
-            "type": "link",
-            "icon": "dashboard",
-            "url": "/d/bmaas-06-sla-compliance?orgId=1&var-datasource=${datasource}&var-node=${node}&var-cluster=${cluster}",
             "targetBlank": false
         }
     ]

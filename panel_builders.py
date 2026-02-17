@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """Shared Grafana panel builder functions for BMaaS Monitoring Dashboard Suite.
 
-Reusable helpers for constructing Grafana dashboard JSON panels.
-Pattern adapted from k8s-node-health-detector/dashboards/generate_dashboard.py.
+v4 OVERHAUL:
+- All devices_* metrics → nodes_* (devices metrics not showing data)
+- gauge() REMOVED — user does not want gauges anywhere
+- nv_link_switches_* → gpu_nvlink_* (NVLink switch metrics showing 0)
+- Leak detection REMOVED (not available)
+- Node filter regex: /skt-dgx.*/ for GPU-only focus
+- Dashboards 05/06 deleted — merged into 00
+- Reverse sort legends on all time series
+- Dashboard links include folder prefix
 """
 
 _id = 0
@@ -12,6 +19,9 @@ def nid():
 
 def reset_ids():
     global _id; _id = 0
+
+# ── Datasource: "Mimir BCM Metrics" ──
+DS_NAME = "Mimir BCM Metrics"
 
 def ds():
     return {"type": "prometheus", "uid": "${datasource}"}
@@ -26,9 +36,12 @@ def refs(targets):
     for i, t in enumerate(targets): t["refId"] = chr(65 + i % 26)
     return targets
 
-# ── Legends ──
-LEGEND_R = {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull"]}
-LEGEND_F = {"displayMode": "table", "placement": "right", "calcs": ["min","max","mean","lastNotNull"]}
+# ── Legends — always reverse sorted ──
+LEGEND_R = {"displayMode": "table", "placement": "right",
+            "calcs": ["lastNotNull"], "sortBy": "Last *", "sortDesc": True}
+LEGEND_F = {"displayMode": "table", "placement": "right",
+            "calcs": ["min","max","mean","lastNotNull"],
+            "sortBy": "Last *", "sortDesc": True}
 
 # ── Professional palette ──
 C_OK  = "#56A64B"; C_WR = "#E0A939"; C_FL = "#C04040"; C_UK = "#8F8F8F"
@@ -36,24 +49,33 @@ C_P0  = "#C04040"; C_P1 = "#E0663E"; C_P2 = "#E0A939"; C_P3 = "#7EB26D"
 C_BL  = "#3274D9"; C_PU = "#8F3BB8"; C_TL = "#6ED0E0"; C_OR = "#EF843C"
 C_YL  = "#F2CC0C"; C_GN = "#73BF69"; C_DK = "#1F1D2B"
 
-# ── Filter shorthands ──
-N  = 'node=~"$node"'
+# ── Filter shorthands using REAL labels ──
+# entity = DGX hostname (skt-dgx filtered via template variable)
+E  = 'entity=~"$node"'
 CL = 'cluster=~"$cluster"'
-GPU = 'gpu=~"$gpu_id"'
+EC = E + ',' + CL  # entity + cluster combined filter
 
-# ── Dashboard UIDs (for cross-linking) ──
+# ── Dashboard UIDs (5 dashboards only — 05/06 deleted) ──
 UIDS = {
     "00": "bmaas-00-fleet-overview",
     "01": "bmaas-01-gpu-health",
     "02": "bmaas-02-infra-health",
     "03": "bmaas-03-network-fabric",
     "04": "bmaas-04-workload-perf",
-    "05": "bmaas-05-burnin-cert",
-    "06": "bmaas-06-sla-compliance",
 }
 
+# Dashboard links with folder prefix
 def dashboard_link(uid, title):
     return f"/d/{uid}?orgId=1&var-datasource=${{datasource}}&var-node=${{node}}&var-cluster=${{cluster}}"
+
+# ── GPU index helper ──
+GPU_COUNT = 8
+
+def gpu_metric(base, gpu_idx):
+    return f"gpu{gpu_idx}_{base}"
+
+def gpu_targets_all(base, unit_label=""):
+    return [tgt(f'{gpu_metric(base, i)}{{{EC}}}', f'GPU{i}') for i in range(GPU_COUNT)]
 
 # ── PANEL BUILDERS ──
 
@@ -62,15 +84,16 @@ def row(title, y, collapsed=False):
             "gridPos":{"h":1,"w":24,"x":0,"y":y},"id":nid(),"panels":[]}
 
 def stat(title, desc, gp, targets, unit="none", decimals=0,
-         thresholds=None, color_mode="background", text_mode="auto",
-         graph_mode="none", mappings=None):
+         thresholds=None, color_mode="background", text_mode="value_and_name",
+         graph_mode="none", mappings=None, orientation="auto"):
+    """Stat panel with value_and_name to show clear labels."""
     return {"id":nid(),"title":title,"description":desc,"type":"stat",
         "datasource":ds(),"gridPos":gp,
         "fieldConfig":{"defaults":{"unit":unit,"decimals":decimals,
             "thresholds":thresholds or {"mode":"absolute","steps":[{"color":C_OK,"value":None}]},
             "mappings":mappings or [],"noValue":"N/A"},"overrides":[]},
         "options":{"reduceOptions":{"calcs":["lastNotNull"],"fields":"","values":False},
-            "orientation":"auto","textMode":text_mode,
+            "orientation":orientation,"textMode":text_mode,
             "colorMode":color_mode,"graphMode":graph_mode,"justifyMode":"center"},
         "targets":refs(targets)}
 
@@ -93,19 +116,6 @@ def tbl(title, desc, gp, targets, transforms=None, overrides=None, sort=None):
             "overrides":overrides or []},
         "options":{"showHeader":True,"sortBy":sort or []},
         "transformations":transforms or [],"targets":refs(targets)}
-
-def gauge(title, desc, gp, targets, unit="percentunit", decimals=1, thresholds=None,
-          mn=0, mx=1):
-    return {"id":nid(),"title":title,"description":desc,"type":"gauge",
-        "datasource":ds(),"gridPos":gp,
-        "fieldConfig":{"defaults":{"unit":unit,"decimals":decimals,
-            "thresholds":thresholds or {"mode":"absolute","steps":[
-                {"color":C_FL,"value":None},{"color":C_WR,"value":0.5},
-                {"color":C_OK,"value":0.8}]},
-            "min":mn,"max":mx},"overrides":[]},
-        "options":{"reduceOptions":{"calcs":["lastNotNull"]},
-            "showThresholdLabels":False,"showThresholdMarkers":True},
-        "targets":refs(targets)}
 
 def piechart(title, desc, gp, targets, legend_placement="right"):
     return {"id":nid(),"title":title,"description":desc,"type":"piechart",
@@ -178,38 +188,36 @@ def wrap_dashboard(uid, title, description, tags, panels, templating,
     return d
 
 # ── STANDARD TEMPLATE VARIABLES ──
+# Datasource = "Mimir BCM Metrics", cluster = "su56", node = entity regex /skt-dgx.*/
 
 def standard_templating(extra_vars=None):
     vars_list = [
-        {"name":"datasource","type":"datasource","label":"Prometheus Data Source",
-         "query":"prometheus","current":{},"hide":0,
+        {"name":"datasource","type":"datasource","label":"Data Source",
+         "query":"prometheus",
+         "current":{"text":"Mimir BCM Metrics","value":"Mimir BCM Metrics"},
+         "hide":0,
          "includeAll":False,"multi":False,"options":[],"refresh":1,"regex":"","skipUrlSync":False},
         {"name":"cluster","type":"query","label":"Cluster",
          "datasource":ds(),
          "definition":"label_values(up, cluster)",
          "query":{"query":"label_values(up, cluster)","refId":"cl"},
-         "current":{},"hide":0,"includeAll":True,"multi":False,
+         "current":{"text":"su56","value":"su56"},
+         "hide":0,"includeAll":False,"multi":False,
          "options":[],"refresh":2,"regex":"","sort":1,"skipUrlSync":False},
-        {"name":"node","type":"query","label":"Node",
+        {"name":"node","type":"query","label":"Node (DGX)",
          "datasource":ds(),
-         "definition":"label_values(up{cluster=~\"$cluster\"}, instance)",
-         "query":{"query":"label_values(up{cluster=~\"$cluster\"}, instance)","refId":"nd"},
-         "current":{},"hide":0,"includeAll":True,"multi":True,
-         "options":[],"refresh":2,"regex":"","sort":1,"skipUrlSync":False},
+         "definition":"label_values({cluster=~\"$cluster\"}, entity)",
+         "query":{"query":"label_values({cluster=~\"$cluster\"}, entity)","refId":"nd"},
+         "current":{},
+         "hide":0,"includeAll":True,"multi":True,
+         "allValue":".*",
+         "options":[],"refresh":2,"regex":"/skt-dgx.*/","sort":1,"skipUrlSync":False},
     ]
     if extra_vars:
         vars_list.extend(extra_vars)
     return {"list": vars_list}
 
-def gpu_var():
-    return {"name":"gpu_id","type":"query","label":"GPU ID",
-         "datasource":ds(),
-         "definition":"label_values(gpu_utilization{node=~\"$node\"}, gpu)",
-         "query":{"query":"label_values(gpu_utilization{node=~\"$node\"}, gpu)","refId":"gp"},
-         "current":{},"hide":0,"includeAll":True,"multi":True,
-         "options":[],"refresh":2,"regex":"","sort":3,"skipUrlSync":False}
-
-# ── DASHBOARD NAV LINKS ──
+# ── DASHBOARD NAV LINKS (5 dashboards only) ──
 
 def sub_dashboard_links():
     return [
@@ -223,8 +231,4 @@ def sub_dashboard_links():
          "url":dashboard_link(UIDS["03"],"Network"),"targetBlank":False},
         {"title":"04 Workload & Jobs","type":"link","icon":"dashboard",
          "url":dashboard_link(UIDS["04"],"Workload"),"targetBlank":False},
-        {"title":"05 Burn-in & Certification","type":"link","icon":"dashboard",
-         "url":dashboard_link(UIDS["05"],"Burn-in"),"targetBlank":False},
-        {"title":"06 SLA Compliance","type":"link","icon":"dashboard",
-         "url":dashboard_link(UIDS["06"],"SLA"),"targetBlank":False},
     ]

@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """Dashboard 04 — Workload & Job Performance.
-Job-level monitoring.
-Answer: 'Will this job fail? Are GPUs being used efficiently?'
+GPU utilization during workloads, power, throttle, error correlation, memory pressure.
+
+v4 OVERHAUL:
+- No gauges — stat panels only
+- Use gpu_utilization (not total_gpu_utilization)
+- Use gpu_power_usage + cpu_power_usage (not total_* versions)
+- Reverse sorted legends
 """
 import json, sys
 from panel_builders import *
@@ -12,226 +17,223 @@ def build_04():
     y = 0
 
     # ════════════════════════════════════════════════════════
-    # ROW: Job Overview
+    # ROW: GPU Compute Utilization
     # ════════════════════════════════════════════════════════
-    panels.append(row("Job Overview", y)); y += 1
+    panels.append(row("GPU Compute Utilization", y)); y += 1
 
     panels.append(stat(
-        "Job Completion Rate",
-        "Percentage of jobs completed successfully. SLA target: ≥ 95%.",
-        {"h":5,"w":6,"x":0,"y":y},
-        [tgt(
-            'sum(bcm_job_completed{' + CL + '}) / '
-            'clamp_min(sum(bcm_job_completed{' + CL + '}) + sum(bcm_job_failed{' + CL + '}), 1)',
-            '', instant=True)],
-        color_mode="background", unit="percentunit", decimals=1,
+        "Fleet Average GPU Utilization",
+        "WHY: Fleet-wide GPU util is the primary revenue/efficiency KPI.\n\n"
+        "FORMULA: avg(gpu_utilization) across all nodes in cluster.\n"
+        "TARGET: > 70% = healthy. < 40% = wasted GPU capacity = revenue loss.",
+        {"h":6,"w":4,"x":0,"y":y},
+        [tgt('avg(gpu_utilization{' + CL + '})','Avg Util',instant=True)],
+        unit="percent", decimals=1,
+        color_mode="background", text_mode="value",
         thresholds={"mode":"absolute","steps":[
-            {"color":C_FL,"value":None},{"color":C_WR,"value":0.9},
-            {"color":C_OK,"value":0.95}]}))
-
-    panels.append(stat(
-        "Jobs Running", "Currently running jobs.",
-        {"h":5,"w":4,"x":6,"y":y},
-        [tgt('sum(bcm_job_running{' + CL + '}) or vector(0)','',instant=True)],
-        color_mode="value",
-        thresholds={"mode":"absolute","steps":[{"color":C_BL,"value":None}]}))
-
-    panels.append(stat(
-        "Jobs Pending", "Jobs waiting for resources.",
-        {"h":5,"w":4,"x":10,"y":y},
-        [tgt('sum(bcm_job_pending{' + CL + '}) or vector(0)','',instant=True)],
-        color_mode="value",
-        thresholds={"mode":"absolute","steps":[{"color":C_WR,"value":None}]}))
-
-    panels.append(stat(
-        "Jobs Failed (24h)", "Jobs failed in last 24 hours.",
-        {"h":5,"w":5,"x":14,"y":y},
-        [tgt('sum(increase(bcm_job_failed{' + CL + '}[24h])) or vector(0)','',instant=True)],
-        color_mode="background",
-        thresholds={"mode":"absolute","steps":[
-            {"color":C_OK,"value":None},{"color":C_WR,"value":5},
-            {"color":C_FL,"value":20}]}))
-
-    panels.append(stat(
-        "Jobs Completed (24h)", "Jobs completed in last 24 hours.",
-        {"h":5,"w":5,"x":19,"y":y},
-        [tgt('sum(increase(bcm_job_completed{' + CL + '}[24h])) or vector(0)','',instant=True)],
-        color_mode="value",
-        thresholds={"mode":"absolute","steps":[{"color":C_GN,"value":None}]}))
-    y += 5
-
-    # ════════════════════════════════════════════════════════
-    # ROW: Job GPU Utilization
-    # ════════════════════════════════════════════════════════
-    panels.append(row("Job GPU Utilization", y)); y += 1
+            {"color":C_FL,"value":None},{"color":C_WR,"value":40},
+            {"color":C_OK,"value":70}]}))
 
     panels.append(ts(
-        "Job GPU Utilization",
-        "job_gpu_utilization — per-job GPU compute utilization. Low = underutilized GPUs.",
-        {"h":6,"w":8,"x":0,"y":y},
-        [tgt('job_gpu_utilization{' + N + '}','Job {{job_id}} GPU{{gpu}}')],
-        axis="Utilization", unit="percent"))
+        "GPU Utilization (per Entity)",
+        "WHY: Per-node GPU utilization shows which nodes are idle vs loaded.\n\n"
+        "METRIC: gpu_utilization — percentage of GPU compute used.\n"
+        "ACTION: Consistently low on specific nodes = scheduling issue.",
+        {"h":6,"w":10,"x":4,"y":y},
+        [tgt('gpu_utilization{' + EC + '}','{{entity}}')],
+        axis="Utilization %", unit="percent"))
 
     panels.append(ts(
-        "Job GPU Memory Utilization",
-        "job_gpu_mem_utilization — per-job GPU memory usage.",
-        {"h":6,"w":8,"x":8,"y":y},
-        [tgt('job_gpu_mem_utilization{' + N + '}','Job {{job_id}} GPU{{gpu}}')],
-        axis="Mem Utilization", unit="percent"))
-
-    panels.append(ts(
-        "GPU Wasted per Job",
-        "job_gpu_wasted — GPUs allocated but idle. High = resource waste.",
-        {"h":6,"w":8,"x":16,"y":y},
-        [tgt('job_gpu_wasted{' + N + '}','Job {{job_id}}')],
-        axis="Wasted GPUs",
-        overrides=[{"matcher":{"id":"byFrameRefID","options":"A"},"properties":[
-            {"id":"color","value":{"fixedColor":C_WR,"mode":"fixed"}}]}]))
+        "GPU Memory Utilization",
+        "WHY: HBM memory usage — high = workloads actively using GPU memory.\n\n"
+        "METRIC: total_gpu_memory_utilization.\n"
+        "NOTE: Near 100% = risk of OOM on GPU. May need model optimization.",
+        {"h":6,"w":10,"x":14,"y":y},
+        [tgt('total_gpu_memory_utilization{' + EC + '}','{{entity}}')],
+        axis="Memory Util %", unit="percent"))
     y += 6
 
     # ════════════════════════════════════════════════════════
-    # ROW: Job Error Correlation
+    # ROW: Per-GPU Performance
     # ════════════════════════════════════════════════════════
-    panels.append(row("Job Error Correlation", y)); y += 1
+    panels.append(row("Per-GPU Performance Under Load", y)); y += 1
 
     panels.append(ts(
-        "Job GPU XID Errors",
-        "job_gpu_xid_error — XID errors during job execution. Critical: 48, 63, 64, 74, 79, 92-95.",
-        {"h":6,"w":8,"x":0,"y":y},
-        [tgt('job_gpu_xid_error{' + N + '}','Job {{job_id}} GPU{{gpu}} XID={{xid}}')],
-        axis="XID Events"))
+        "GPU Clock Speed (All 8)",
+        "WHY: Clock speed directly affects compute throughput.\n\n"
+        "METRICS: gpu0_clock .. gpu7_clock.\n"
+        "SIGNIFICANCE: Lower-than-expected during load = power/thermal throttling.",
+        {"h":6,"w":12,"x":0,"y":y},
+        [tgt(f'gpu{i}_clock{{{EC}}}', f'{{{{entity}}}} GPU{i}') for i in range(8)],
+        axis="Clock (MHz)"))
 
     panels.append(ts(
-        "Job GPU ECC DBE",
-        "job_gpu_ecc_dbe_agg — double-bit ECC errors during job. > 0 = data corruption risk.",
-        {"h":6,"w":8,"x":8,"y":y},
-        [tgt('job_gpu_ecc_dbe_agg{' + N + '}','Job {{job_id}} GPU{{gpu}}')],
-        axis="DBE",
-        overrides=[{"matcher":{"id":"byFrameRefID","options":"A"},"properties":[
-            {"id":"color","value":{"fixedColor":C_FL,"mode":"fixed"}}]}]))
-
-    panels.append(ts(
-        "Job Row Remap Failure",
-        "job_gpu_row_remap_failure — row remapping exhausted during job.",
-        {"h":6,"w":8,"x":16,"y":y},
-        [tgt('job_gpu_row_remap_failure{' + N + '}','Job {{job_id}} GPU{{gpu}}')],
-        axis="Remap Failure"))
+        "GPU Performance State",
+        "WHY: P-state indicates GPU power mode during workload.\n\n"
+        "METRICS: gpu0_perfstate .. gpu7_perfstate.\n"
+        "EXPECTED: P0 during active training. P8 = idle GPU (not utilized).",
+        {"h":6,"w":12,"x":12,"y":y},
+        [tgt(f'gpu{i}_perfstate{{{EC}}}', f'{{{{entity}}}} GPU{i}') for i in range(8)],
+        axis="PerfState"))
     y += 6
 
     # ════════════════════════════════════════════════════════
-    # ROW: Job Throttling & Memory Pressure
+    # ROW: Power During Workload
     # ════════════════════════════════════════════════════════
-    panels.append(row("Job Throttling & Memory Pressure", y)); y += 1
+    panels.append(row("Power During Workload", y)); y += 1
 
     panels.append(ts(
-        "Job Thermal Violations",
-        "job_gpu_thermal_violation — GPU clocks throttled due to temperature during job.",
+        "GPU Power per Entity",
+        "WHY: GPU power correlates with compute activity. Low power during job = issue.\n\n"
+        "METRIC: gpu_power_usage.\n"
+        "EXPECTED: Near 8kW (8×1000W TDP) during full training run.",
+        {"h":6,"w":8,"x":0,"y":y},
+        [tgt('gpu_power_usage{' + EC + '}','{{entity}}')],
+        axis="Power", unit="watt"))
+
+    panels.append(ts(
+        "Per-GPU Power (All 8)",
+        "WHY: Identify specific GPUs drawing less power = possible throttling.\n\n"
+        "METRICS: gpu0_power .. gpu7_power.",
+        {"h":6,"w":8,"x":8,"y":y},
+        [tgt(f'gpu{i}_power{{{EC}}}', f'{{{{entity}}}} GPU{i}') for i in range(8)],
+        axis="Power", unit="watt"))
+
+    panels.append(ts(
+        "Power Limit vs Actual",
+        "WHY: Gap between limit and actual = either idle or throttled.\n\n"
+        "METRICS: GPU_enforced_power_limit vs gpu_power_usage.\n"
+        "SIGNIFICANCE: If actual << limit during load, investigate throttling.",
+        {"h":6,"w":8,"x":16,"y":y},
+        [tgt('GPU_enforced_power_limit{' + EC + '}','{{entity}} Limit'),
+         tgt('gpu_power_usage{' + EC + '}','{{entity}} Actual')],
+        axis="Watts", unit="watt"))
+    y += 6
+
+    # ════════════════════════════════════════════════════════
+    # ROW: Throttle & Thermal Under Load
+    # ════════════════════════════════════════════════════════
+    panels.append(row("Throttle & Thermal Under Load", y)); y += 1
+
+    panels.append(ts(
+        "GPU Throttle Events",
+        "WHY: Throttling = forced clock reduction. Performance loss for running jobs.\n\n"
+        "METRICS: gpu0_throttle .. gpu7_throttle — 0 = no throttle.\n"
+        "ACTION: Sustained > 0 = check CDU cooling, power supply, ambient temp.",
+        {"h":6,"w":8,"x":0,"y":y},
+        [tgt(f'gpu{i}_throttle{{{EC}}}', f'{{{{entity}}}} GPU{i}') for i in range(8)],
+        axis="Throttle"))
+
+    panels.append(ts(
+        "GPU Temperature Under Load",
+        "WHY: Thermal monitoring during active workload.\n\n"
+        "METRICS: gpu0_temperature .. gpu7_temperature.\n"
+        "THRESHOLD: > 83°C = throttle risk. > 90°C = cooling failure.",
+        {"h":6,"w":8,"x":8,"y":y},
+        [tgt(f'gpu{i}_temperature{{{EC}}}', f'{{{{entity}}}} GPU{i}') for i in range(8)],
+        axis="Temperature", unit="celsius"))
+
+    panels.append(ts(
+        "Thermal & Board Limit Violations",
+        "WHY: Violation events during workload = performance impact.\n\n"
+        "METRICS: GPU_thermal_violation, gpu_board_limit_violation, gpu_reliability_violation.\n"
+        "SIGNIFICANCE: Frequent = hardware approaching limits.",
+        {"h":6,"w":8,"x":16,"y":y},
+        [tgt('GPU_thermal_violation{' + EC + '}','{{entity}} Thermal'),
+         tgt('gpu_board_limit_violation{' + EC + '}','{{entity}} Board'),
+         tgt('gpu_reliability_violation{' + EC + '}','{{entity}} Reliability')],
+        axis="Violations"))
+    y += 6
+
+    # ════════════════════════════════════════════════════════
+    # ROW: ECC Error Correlation
+    # ════════════════════════════════════════════════════════
+    panels.append(row("ECC Error Correlation During Workload", y)); y += 1
+
+    panels.append(ts(
+        "ECC Errors (Volatile / Since Reset)",
+        "WHY: Volatile ECC counters show errors that occurred during current workload.\n\n"
+        "METRICS: gpu_ecc_sbe_vol (correctable) + gpu_ecc_dbe_vol (UNCORRECTABLE).\n"
+        "ACTION: DBE during workload = job results are UNRELIABLE. Stop and replace GPU.",
+        {"h":6,"w":8,"x":0,"y":y},
+        [tgt('gpu_ecc_sbe_vol{' + EC + '}','{{entity}} SBE'),
+         tgt('gpu_ecc_dbe_vol{' + EC + '}','{{entity}} DBE')],
+        axis="ECC Errors"))
+
+    panels.append(ts(
+        "GPU Recovery Checks",
+        "WHY: Automatic GPU recovery = DCGM detected a problem and tried to fix it.\n\n"
+        "METRIC: gpu_recovery_check — counter of recovery attempts.\n"
+        "ACTION: Frequent = GPU is unstable, schedule maintenance.",
+        {"h":6,"w":8,"x":8,"y":y},
+        [tgt('gpu_recovery_check{' + EC + '}','{{entity}}')],
+        axis="Recovery Events"))
+
+    panels.append(ts(
+        "ECC Clock Violations",
+        "WHY: ECC checking overhead impacting GPU clock speed.\n\n"
+        "METRIC: gpu_total_ecc_clocks_violation.\n"
+        "SIGNIFICANCE: Trade-off between reliability and performance.",
+        {"h":6,"w":8,"x":16,"y":y},
+        [tgt('gpu_total_ecc_clocks_violation{' + EC + '}','{{entity}}')],
+        axis="Violations"))
+    y += 6
+
+    # ════════════════════════════════════════════════════════
+    # ROW: Memory Pressure & System
+    # ════════════════════════════════════════════════════════
+    panels.append(row("System Memory Pressure", y)); y += 1
+
+    panels.append(ts(
+        "System Memory Utilization",
+        "WHY: Host memory pressure can cause OOM kills, affecting GPU jobs.\n\n"
+        "METRIC: memory_utilization.\n"
+        "ACTION: > 90% = risk. > 95% = OOM imminent.",
         {"h":6,"w":6,"x":0,"y":y},
-        [tgt('job_gpu_thermal_violation{' + N + '}','Job {{job_id}} GPU{{gpu}}')],
-        axis="Violation (µs)"))
+        [tgt('memory_utilization{' + EC + '}','{{entity}}')],
+        axis="Utilization %", unit="percent"))
 
     panels.append(ts(
-        "Job Power Violations",
-        "job_gpu_power_violation — GPU clocks throttled due to power cap during job.",
+        "Swap Activity",
+        "WHY: Swap usage = system ran out of RAM. TERRIBLE for GPU workloads.\n\n"
+        "METRICS: swap_used + swap_total.\n"
+        "ACTION: swap_used > 0 during GPU job = memory leak or overcommit.",
         {"h":6,"w":6,"x":6,"y":y},
-        [tgt('job_gpu_power_violation{' + N + '}','Job {{job_id}} GPU{{gpu}}')],
-        axis="Violation (µs)"))
+        [tgt('swap_used{' + EC + '}','{{entity}} Used'),
+         tgt('swap_total{' + EC + '}','{{entity}} Total')],
+        axis="Swap", unit="decbytes"))
 
     panels.append(ts(
-        "Job Reliability Violations",
-        "job_gpu_reliability_violation — GPU reliability events during job.",
+        "System Load vs Cores",
+        "WHY: Load > core count = CPU oversubscribed, bottlenecking GPU.\n\n"
+        "METRICS: load_one + cores_total.\n"
+        "RULE: load_one < cores_total = healthy.",
         {"h":6,"w":6,"x":12,"y":y},
-        [tgt('job_gpu_reliability_violation{' + N + '}','Job {{job_id}} GPU{{gpu}}')],
-        axis="Violation"))
+        [tgt('load_one{' + EC + '}','{{entity}} Load 1m'),
+         tgt('cores_total{' + EC + '}','{{entity}} Cores')],
+        axis="Count"))
 
     panels.append(ts(
-        "Job Memory Pressure",
-        "job_memory_failcnt — OOM events. > 0 = job may crash.",
+        "Paging Activity",
+        "WHY: High paging = kernel swapping memory pages. Severe GPU workload impact.\n\n"
+        "METRICS: paging_in + paging_out.\n"
+        "ACTION: Sustained high paging = add RAM or reduce workload count.",
         {"h":6,"w":6,"x":18,"y":y},
-        [tgt('job_memory_failcnt{' + N + '}','Job {{job_id}}'),
-         tgt('job_memory_cache_bytes{' + N + '}','Job {{job_id}} Cache')],
-        axis="Count / Bytes"))
+        [tgt('paging_in{' + EC + '}','{{entity}} PageIn'),
+         tgt('paging_out{' + EC + '}','{{entity}} PageOut')],
+        axis="Pages/s"))
     y += 6
 
-    # ════════════════════════════════════════════════════════
-    # ROW: Job Power & Chargeback
-    # ════════════════════════════════════════════════════════
-    panels.append(row("Job Power & Chargeback", y)); y += 1
-
-    panels.append(ts(
-        "Job GPU Power Usage",
-        "job_gpu_power_usage — per-job GPU power draw.",
-        {"h":6,"w":8,"x":0,"y":y},
-        [tgt('job_gpu_power_usage{' + N + '}','Job {{job_id}} GPU{{gpu}}')],
-        axis="Power", unit="watt"))
-
-    panels.append(ts(
-        "Job CPU Power Usage",
-        "job_cpu_power_usage — per-job CPU power draw.",
-        {"h":6,"w":8,"x":8,"y":y},
-        [tgt('job_cpu_power_usage{' + N + '}','Job {{job_id}}')],
-        axis="Power", unit="watt"))
-
-    panels.append(ts(
-        "Job Completion Rate Over Time",
-        "Success vs failure rate over sliding window.",
-        {"h":6,"w":8,"x":16,"y":y},
-        [tgt(
-            'sum(increase(bcm_job_completed{' + CL + '}[1h])) / '
-            'clamp_min(sum(increase(bcm_job_completed{' + CL + '}[1h])) + '
-            'sum(increase(bcm_job_failed{' + CL + '}[1h])), 1)',
-            'Success Rate')],
-        axis="Rate", unit="percentunit"))
-    y += 6
-
-    # ════════════════════════════════════════════════════════
-    # ROW: Single-Node vs Multi-Node Failure Prediction
-    # ════════════════════════════════════════════════════════
-    panels.append(row("Failure Prediction Signals", y)); y += 1
-
-    panels.append(tbl(
-        "Single-Node Job Failure Signals",
-        "Nodes with active GPU health issues, ECC errors, memory pressure, or thermal violations "
-        "that predict single-node job failures.",
-        {"h":8,"w":12,"x":0,"y":y},
-        [tgt(
-            '(gpu_health_overall{' + N + '} != 0) or '
-            '(gpu_ecc_dbe_agg{' + N + '} > 0) or '
-            '(gpu_thermal_violation{' + N + '} > 0)',
-            '', fmt="table")],
-        transforms=[{"id":"organize","options":{
-            "excludeByName":{"Time":True,"__name__":True,"job":True,"cluster":True},
-            "renameByName":{"instance":"Node","gpu":"GPU","Value":"Signal"}}}],
-        sort=[{"displayName":"Signal","desc":True}]))
-
-    panels.append(tbl(
-        "Multi-Node Job Failure Signals",
-        "Single-node signals PLUS NVLink errors, InfiniBand errors, NMX domain health, "
-        "GPU fabric status. Any signal = multi-node job at risk.",
-        {"h":8,"w":12,"x":12,"y":y},
-        [tgt(
-            '(gpu_nvlink_crc_data_errors{' + N + '} > 0) or '
-            '(nmxm_domain_health_count{' + CL + ', state="unhealthy"} > 0) or '
-            '(gpu_fabric_status{' + N + '} != 0)',
-            '', fmt="table")],
-        transforms=[{"id":"organize","options":{
-            "excludeByName":{"Time":True,"__name__":True,"job":True,"cluster":True},
-            "renameByName":{"instance":"Node","gpu":"GPU","state":"State","Value":"Signal"}}}],
-        sort=[{"displayName":"Signal","desc":True}]))
-    y += 8
-
-    # ── Build dashboard ──
     return wrap_dashboard(
         uid=UIDS["04"],
         title="BMaaS — 04 Workload & Job Performance",
-        description="Job completion rate, GPU utilization per job, wasted GPUs, XID/ECC errors during jobs, "
-                    "thermal/power/reliability violations, memory pressure, power consumption, failure prediction.",
+        description="GPU utilization during jobs, per-GPU clock/power, throttle/thermal, "
+                    "ECC error correlation, recovery checks, memory pressure.",
         tags=["bmaas","workload","job","performance","gpu","utilization","bcm11"],
         panels=panels,
-        templating=standard_templating(extra_vars=[gpu_var()]),
+        templating=standard_templating(),
         links=sub_dashboard_links()
     )
-
 
 if __name__ == "__main__":
     out = sys.argv[1] if len(sys.argv) > 1 else "dashboards/04-workload-job-performance.json"
@@ -239,5 +241,3 @@ if __name__ == "__main__":
     with open(out, "w") as f:
         json.dump(d, f, indent=4)
     print(f"Generated {out}: {len(d['panels'])} panels")
-    for p in d["panels"]:
-        print(f"  [{p.get('type',''):14s}] {p.get('title','')}")
