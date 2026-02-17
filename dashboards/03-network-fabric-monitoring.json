@@ -119,7 +119,7 @@
                 "hide": 0,
                 "includeAll": true,
                 "multi": true,
-                "allValue": ".*",
+                "allValue": "skt-dgx.*",
                 "options": [],
                 "refresh": 2,
                 "regex": "/skt-dgx.*/",

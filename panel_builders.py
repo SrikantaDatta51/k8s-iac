@@ -64,7 +64,9 @@ UIDS = {
     "04": "bmaas-04-workload-perf",
 }
 
-# Dashboard links with folder prefix
+# Folder name prefix for dashboard links (matches Grafana folder import path)
+DASHBOARD_FOLDER = "bmaas-dashboards"
+
 def dashboard_link(uid, title):
     return f"/d/{uid}?orgId=1&var-datasource=${{datasource}}&var-node=${{node}}&var-cluster=${{cluster}}"
 
@@ -210,7 +212,7 @@ def standard_templating(extra_vars=None):
          "query":{"query":"label_values({cluster=~\"$cluster\"}, entity)","refId":"nd"},
          "current":{},
          "hide":0,"includeAll":True,"multi":True,
-         "allValue":".*",
+         "allValue":"skt-dgx.*",
          "options":[],"refresh":2,"regex":"/skt-dgx.*/","sort":1,"skipUrlSync":False},
     ]
     if extra_vars:
